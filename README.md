@@ -249,3 +249,4 @@ MIT License - see [LICENSE](./packages/nest-file-storage/LICENSE)
 ---
 
 Made with ❤️ for the NestJS community
+# nest-file-storage
