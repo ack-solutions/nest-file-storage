@@ -1,42 +1,167 @@
-# Example App - @ackplus/nest-file-storage
+# File Storage Example App
 
-Complete working example demonstrating nest-file-storage with TypeORM and SQLite using the **CLI approach**.
+A complete example application demonstrating the usage of `@ackplus/nest-file-storage` with Swagger API documentation.
 
-## 🚀 Quick Start
+## 🚀 Features
 
-### 1. Build the Package
+- ✅ File upload (single and multiple)
+- ✅ Image upload with validation
+- ✅ Document upload
+- ✅ File download
+- ✅ File deletion
+- ✅ File copying
+- ✅ Get file URLs
+- ✅ Get signed URLs (for S3)
+- ✅ Swagger API documentation
+- ✅ Health check endpoint
+
+## 📦 Installation
 
 ```bash
-# From root directory
-pnpm -C packages/nest-file-storage build
+# From the example-app directory
+pnpm install
+
+# Or from the root directory
+pnpm install
 ```
 
-### 2. Run Tests
+## 🏃 Running the App
 
 ```bash
-pnpm test
-```
-
-### 3. Seed Database
-
-```bash
-# Basic seed (10 users, 30 posts)
-pnpm seed
-
-# Drop and reseed
-pnpm seed:refresh
-
-# Run specific seeder
-pnpm seed:users
-
-# Watch mode (auto-reseed on changes)
-pnpm seed:watch
-```
-
-### 4. Start Application
-
-```bash
+# Development mode
 pnpm start:dev
+
+# Production mode
+pnpm build
+pnpm start:prod
+```
+
+The application will start on `http://localhost:3000`
+
+## 📚 Swagger Documentation
+
+Once the app is running, visit:
+
+**http://localhost:3000/api**
+
+The Swagger UI provides:
+- Interactive API documentation
+- Try-it-out feature for testing endpoints
+- Request/response schemas
+- Example values
+
+## 🎯 Available Endpoints
+
+### Health Check
+
+- `GET /` - Welcome message
+- `GET /health` - Health check
+
+### File Operations
+
+- `POST /files/upload` - Upload a single file
+- `POST /files/upload-multiple` - Upload multiple files (max 10)
+- `POST /files/upload-image` - Upload an image with validation
+- `POST /files/upload-document` - Upload a document
+- `GET /files/download/:key` - Download a file
+- `GET /files/url/:key` - Get public URL for a file
+- `GET /files/signed-url/:key` - Get signed URL (S3 only)
+- `DELETE /files/:key` - Delete a file
+- `POST /files/copy` - Copy a file
+
+## 🧪 Testing the API
+
+### Using Swagger UI
+
+1. Open http://localhost:3000/api
+2. Click on any endpoint
+3. Click "Try it out"
+4. Fill in the required parameters
+5. Click "Execute"
+
+### Using cURL
+
+**Upload a file:**
+```bash
+curl -X POST http://localhost:3000/files/upload \
+  -F "file=@/path/to/your/file.jpg"
+```
+
+**Upload multiple files:**
+```bash
+curl -X POST http://localhost:3000/files/upload-multiple \
+  -F "files=@/path/to/file1.jpg" \
+  -F "files=@/path/to/file2.jpg"
+```
+
+**Upload an image:**
+```bash
+curl -X POST http://localhost:3000/files/upload-image \
+  -F "image=@/path/to/image.jpg"
+```
+
+**Download a file:**
+```bash
+curl -X GET http://localhost:3000/files/download/images/image-123456.jpg \
+  --output downloaded-file.jpg
+```
+
+**Get file URL:**
+```bash
+curl -X GET http://localhost:3000/files/url/images/image-123456.jpg
+```
+
+**Delete a file:**
+```bash
+curl -X DELETE http://localhost:3000/files/images/image-123456.jpg
+```
+
+**Copy a file:**
+```bash
+curl -X POST http://localhost:3000/files/copy \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sourceKey": "images/image-123456.jpg",
+    "targetKey": "images/image-123456-copy.jpg"
+  }'
+```
+
+### Using Postman
+
+1. Import the API from Swagger: http://localhost:3000/api-json
+2. Or manually create requests using the endpoints above
+
+## ⚙️ Configuration
+
+The app uses **Local Storage** by default. Files are stored in the `./uploads` directory.
+
+### Changing Storage Provider
+
+Edit `src/app.module.ts`:
+
+**For AWS S3:**
+```typescript
+NestFileStorageModule.forRoot({
+  storage: FileStorageEnum.S3,
+  s3Config: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+    bucket: process.env.AWS_BUCKET,
+  },
+})
+```
+
+**For Azure Blob Storage:**
+```typescript
+NestFileStorageModule.forRoot({
+  storage: FileStorageEnum.AZURE,
+  azureConfig: {
+    account: process.env.AZURE_STORAGE_ACCOUNT,
+    accountKey: process.env.AZURE_STORAGE_KEY,
+    container: process.env.AZURE_CONTAINER,
+  },
+})
 ```
 
 ## 📁 Project Structure
@@ -44,174 +169,94 @@ pnpm start:dev
 ```
 example-app/
 ├── src/
-│   ├── database/
-│   │   ├── entities/       # TypeORM entities
-│   │   ├── factories/      # Data factories
-│   │   └── seeders/        # Seeders
-│   ├── app.module.ts       # Main module (no seeder imports!)
-│   └── main.ts            # App entry
-├── seeder.config.ts       # Seeder CLI configuration
-└── test/                  # Tests
+│   ├── app.controller.ts       # Health check endpoints
+│   ├── app.service.ts          # Application service
+│   ├── app.module.ts           # Main module with storage config
+│   ├── file.controller.ts      # File upload/management endpoints
+│   └── main.ts                 # App bootstrap with Swagger
+├── uploads/                    # Local file storage (auto-created)
+├── package.json
+└── README.md
 ```
 
-## 🎯 Features Demonstrated
+## 🔍 Key Features Demonstrated
 
-- ✅ **CLI-based seeding** (no app.module.ts modifications)
-- ✅ TypeORM with SQLite
-- ✅ Entity relationships (One-to-Many)
-- ✅ Factory pattern with Faker.js
-- ✅ Batch insertion
-- ✅ Watch mode with auto-reload
-- ✅ 40+ tests with 90%+ coverage
+### 1. Single File Upload
+- Basic file upload
+- Returns file key and URL
 
-## 📊 What's Included
+### 2. Multiple Files Upload
+- Upload up to 10 files at once
+- Returns array of file information
 
-### Configuration
+### 3. Image Upload with Validation
+- File type validation (JPEG, PNG, GIF, WebP)
+- File size validation (max 5MB)
+- Custom file naming
+- Organized in `images/` directory
 
-**seeder.config.ts** - CLI configuration file:
-```typescript
-export default {
-  imports: [
-    TypeOrmModule.forRoot({ /* db config */ }),
-    TypeOrmModule.forFeature([User, Post]),
-  ],
-  seeders: [UserSeeder, PostSeeder],
-};
-```
+### 4. Document Upload
+- Custom file naming with timestamp
+- Organized in `documents/` directory
 
-### Entities
-- **User** - email, name, role, posts relationship
-- **Post** - title, content, status, author relationship
+### 5. File Download
+- Stream file to client
+- Proper content headers
 
-### Factories
-- **UserFactory** - Generates realistic user data
-- **PostFactory** - Generates realistic post data
+### 6. File Management
+- Get public URLs
+- Get signed URLs (S3)
+- Delete files
+- Copy files
 
-### Seeders
-- **UserSeeder** - Seeds users with batch insertion
-- **PostSeeder** - Seeds posts with relationships
-
-### Tests
-- Factory tests (21 tests)
-- Seeder integration tests (17 tests)
-- E2E tests (8 tests)
-
-## 💡 Examples
-
-### Entity
-
-```typescript
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column({ unique: true })
-  email: string;
-
-  @OneToMany(() => Post, (post) => post.author)
-  posts: Post[];
-}
-```
-
-### Factory
-
-```typescript
-export class UserFactory {
-  @Factory((faker) => faker.internet.email())
-  email: string;
-
-  @Factory((faker) => faker.person.firstName())
-  firstName: string;
-}
-```
-
-### Seeder
-
-```typescript
-@Injectable()
-export class UserSeeder implements Seeder {
-  async seed(options: SeederServiceOptions): Promise<void> {
-    const factory = DataFactory.createForClass(UserFactory);
-    const users = factory.generate(10);
-    await this.userRepository.save(users);
-  }
-
-  async drop(options: SeederServiceOptions): Promise<void> {
-    await this.userRepository.delete({});
-  }
-}
-```
-
-## 🛠️ Development
-
-### Available Commands
+## 🧪 Running Tests
 
 ```bash
-# Seeding
-pnpm seed              # Run all seeders
-pnpm seed:refresh      # Drop and reseed all
-pnpm seed:users        # Run only UserSeeder
-pnpm seed:watch        # Auto-reseed on file changes
+# Unit tests
+pnpm test
 
-# Development
-pnpm start:dev         # Start app in watch mode
-pnpm test:watch        # Run tests in watch mode
+# E2E tests
+pnpm test:e2e
 
-# Testing
-pnpm test              # Run all tests
-pnpm test:cov          # Run with coverage
-pnpm test:e2e          # Run E2E tests
+# Test coverage
+pnpm test:cov
 ```
-
-### Watch Modes
-
-Run multiple terminals for full development workflow:
-
-```bash
-# Terminal 1: Application server
-pnpm start:dev
-
-# Terminal 2: Tests with auto-reload
-pnpm test:watch
-
-# Terminal 3: Auto-reseed on changes
-pnpm seed:watch
-```
-
-### Adding New Entity
-
-1. Create entity in `src/database/entities/`
-2. Create factory in `src/database/factories/`
-3. Create seeder in `src/database/seeders/`
-4. **Update `seeder.config.ts`** (not app.module.ts!)
-5. Run `pnpm seed`
 
 ## 🐛 Troubleshooting
 
-**Database locked error:**
-```bash
-rm database.sqlite
-pnpm seed
+### Port Already in Use
+
+Change the port in `src/main.ts`:
+```typescript
+await app.listen(3001); // Use different port
 ```
 
-**Import errors:**
+### Upload Directory Not Created
+
+The app automatically creates the `uploads` directory. If you have permission issues:
 ```bash
-pnpm -C packages/nest-file-storage build
+mkdir uploads
+chmod 755 uploads
 ```
 
-**Test failures:**
+### Swagger Not Loading
+
+Make sure `@nestjs/swagger` is installed:
 ```bash
-pnpm test --clearCache
-pnpm test
+pnpm add @nestjs/swagger
 ```
 
-## 📚 Learn More
+## 📖 Learn More
 
-- [Main Documentation](../../packages/nest-file-storage/README.md)
-- [Quick Start Guide](../../packages/nest-file-storage/QUICKSTART.md)
-- [More Examples](../../packages/nest-file-storage/examples/)
+- **[Package Documentation](../../packages/nest-file-storage/README.md)** - Complete guide
+- **[Examples](../../packages/nest-file-storage/examples/)** - More examples
+- **[NestJS Documentation](https://docs.nestjs.com/)** - NestJS framework
+- **[Swagger Documentation](https://swagger.io/docs/)** - API documentation
 
----
+## 🤝 Contributing
 
-**Questions?** Check the [main README](../../README.md) or open an issue!
+This example app is part of the `@ackplus/nest-file-storage` project. Contributions are welcome!
+
+## 📄 License
+
+MIT

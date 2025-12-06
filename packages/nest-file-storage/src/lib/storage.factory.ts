@@ -16,13 +16,13 @@ export class StorageFactory {
 
         switch (storageType) {
             case FileStorageEnum.LOCAL:
-                const { LocalStorage } = await import('./storage/local.storage');
+                const { LocalStorage } = await import('./storage/local.storage.js');
                 storageInstance = new LocalStorage(options as LocalStorageOptions);
                 break;
 
             case FileStorageEnum.AZURE:
                 try {
-                    const { AzureStorage } = await import('./storage/azure.storage');
+                    const { AzureStorage } = await import('./storage/azure.storage.js');
                     storageInstance = new AzureStorage(options as AzureStorageOptions);
                 } catch (error) {
                     throw new Error(
@@ -34,7 +34,7 @@ export class StorageFactory {
 
             case FileStorageEnum.S3:
                 try {
-                    const { S3Storage } = await import('./storage/s3.storage');
+                    const { S3Storage } = await import('./storage/s3.storage.js');
                     storageInstance = new S3Storage(options as S3StorageOptions);
                 } catch (error) {
                     throw new Error(

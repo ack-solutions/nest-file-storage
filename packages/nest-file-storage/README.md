@@ -1,593 +1,640 @@
 # @ackplus/nest-file-storage
 
-A powerful and flexible database seeding library for NestJS applications with support for factories, data generation using Faker.js, and CLI commands.
+A flexible and feature-rich file storage solution for NestJS applications with support for Local, AWS S3, and Azure Blob Storage.
 
 ## ✨ Features
 
-- 🌱 **CLI-Based** - Simple command-line interface, no app code modifications needed
-- 🏭 **Factory Pattern** - Generate realistic test data with Faker.js
-- 🔄 **Multiple ORMs** - Support for TypeORM, Mongoose, and Prisma
-- 📦 **Batch Operations** - Efficient bulk data insertion
-- 🎯 **Selective Seeding** - Run specific seeders by name
-- 🔥 **Refresh Mode** - Drop existing data before seeding
-- 🧪 **Test-Friendly** - Perfect for testing and development
+- 📦 **Multiple Storage Providers** - Local, AWS S3, and Azure Blob Storage support
+- 🔄 **Easy Switching** - Switch between storage providers with minimal configuration
+- 🎯 **NestJS Integration** - Seamless integration with NestJS decorators and interceptors
+- 📁 **File Operations** - Upload, download, delete, copy files with ease
+- 🔐 **Signed URLs** - Generate presigned URLs for secure file access (S3)
+- 🎨 **Customizable** - Custom file naming, directory structure, and transformations
 - 📝 **TypeScript** - Full TypeScript support with type safety
+- 🧪 **Test-Friendly** - Easy to mock and test
 
 ## 📦 Installation
 
 ```bash
-npm install @ackplus/nest-file-storage @faker-js/faker
+npm install @ackplus/nest-file-storage
 # or
-pnpm add @ackplus/nest-file-storage @faker-js/faker
+pnpm add @ackplus/nest-file-storage
 # or
-yarn add @ackplus/nest-file-storage @faker-js/faker
+yarn add @ackplus/nest-file-storage
 ```
 
-**For TypeScript config files**, also install:
+**For AWS S3 support:**
 
 ```bash
-npm install -D ts-node typescript
+npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
 ```
 
-## 🚀 Quick Start (5 Steps)
-
-### Step 1: Create Entity
-
-```typescript
-// src/entities/user.entity.ts
-import { Entity, PrimaryGeneratedColumn, Column } from 'typeorm';
-
-@Entity('users')
-export class User {
-  @PrimaryGeneratedColumn()
-  id: number;
-
-  @Column()
-  name: string;
-
-  @Column({ unique: true })
-  email: string;
-
-  @Column()
-  role: string;
-}
-```
-
-### Step 2: Create Factory
-
-```typescript
-// src/factories/user.factory.ts
-import { Factory } from '@ackplus/nest-file-storage';
-
-export class UserFactory {
-  @Factory((faker) => faker.person.fullName())
-  name: string;
-
-  @Factory((faker) => faker.internet.email())
-  email: string;
-
-  @Factory((faker) => faker.helpers.arrayElement(['admin', 'user', 'guest']))
-  role: string;
-}
-```
-
-### Step 3: Create Seeder
-
-```typescript
-// src/seeders/user.seeder.ts
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Seeder, DataFactory } from '@ackplus/nest-file-storage';
-import { User } from '../entities/user.entity';
-import { UserFactory } from '../factories/user.factory';
-
-@Injectable()
-export class UserSeeder implements Seeder {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-  ) {}
-
-  async seed(): Promise<void> {
-    // Create factory instance
-    const factory = DataFactory.createForClass(UserFactory);
-
-    // Generate 10 users
-    const users = factory.generate(10);
-
-    // Save to database
-    await this.userRepository.save(users);
-    
-    console.log('✅ Seeded 10 users');
-  }
-
-  async drop(): Promise<void> {
-    // Clear all users
-    await this.userRepository.delete({});
-    
-    console.log('🗑️  Dropped all users');
-  }
-}
-```
-
-### Step 4: Create Configuration File
-
-Create `seeder.config.ts` in your **project root**:
-
-```typescript
-// seeder.config.ts
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './src/entities/user.entity';
-import { UserSeeder } from './src/seeders/user.seeder';
-
-export default {
-  imports: [
-    // Database configuration
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: 'localhost',
-      port: 5432,
-      username: 'postgres',
-      password: 'postgres',
-      database: 'mydb',
-      entities: [User],
-      synchronize: true,
-    }),
-    
-    // Register repositories
-    TypeOrmModule.forFeature([User]),
-  ],
-  
-  // List seeders (run in order)
-  seeders: [UserSeeder],
-};
-```
-
-### Step 5: Run Seeder
-
-Add script to `package.json`:
-
-```json
-{
-  "scripts": {
-    "seed": "nest-seed -c seeder.config.ts"
-  }
-}
-```
-
-Run it:
+**For Azure Blob Storage support:**
 
 ```bash
-npm run seed
+npm install @azure/storage-blob
 ```
 
-**That's it!** Your database is now seeded! 🎉
+## 🚀 Quick Start
 
-## 🖥️ CLI Commands
+### Step 1: Configure Module
 
-### Basic Usage
+Choose your storage provider and configure the module:
 
-```bash
-# Run all seeders
-nest-seed -c seeder.config.ts
+#### Local Storage
 
-# Drop and reseed
-nest-seed -c seeder.config.ts --refresh
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
 
-# Run specific seeder
-nest-seed -c seeder.config.ts --name UserSeeder
-
-# Run multiple seeders
-nest-seed -c seeder.config.ts --name UserSeeder ProductSeeder
+@Module({
+  imports: [
+    NestFileStorageModule.forRoot({
+      storage: FileStorageEnum.LOCAL,
+      localConfig: {
+        rootPath: './uploads',
+        baseUrl: 'http://localhost:3000/uploads',
+      },
+    }),
+  ],
+})
+export class AppModule {}
 ```
 
-### Available Options
+#### AWS S3
 
-| Option | Alias | Description | Default |
-|--------|-------|-------------|---------|
-| `--config` | `-c` | Path to configuration file | (required) |
-| `--refresh` | `-r` | Drop data before seeding | `false` |
-| `--name` | `-n` | Run specific seeder(s) | (all) |
-| `--dummyData` | `-d` | Include dummy data flag | `false` |
-| `--help` | `-h` | Show help | |
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
 
-### Package.json Scripts
+@Module({
+  imports: [
+    NestFileStorageModule.forRoot({
+      storage: FileStorageEnum.S3,
+      s3Config: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+        region: process.env.AWS_REGION,
+        bucket: process.env.AWS_BUCKET,
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
 
-```json
-{
-  "scripts": {
-    "seed": "nest-seed -c seeder.config.ts",
-    "seed:refresh": "nest-seed -c seeder.config.ts -r",
-    "seed:users": "nest-seed -c seeder.config.ts -n UserSeeder",
-    "seed:watch": "nodemon --watch src/seeders --ext ts --exec nest-seed -c seeder.config.ts"
+#### Azure Blob Storage
+
+```typescript
+// app.module.ts
+import { Module } from '@nestjs/common';
+import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
+
+@Module({
+  imports: [
+    NestFileStorageModule.forRoot({
+      storage: FileStorageEnum.AZURE,
+      azureConfig: {
+        account: process.env.AZURE_STORAGE_ACCOUNT,
+        accountKey: process.env.AZURE_STORAGE_KEY,
+        container: process.env.AZURE_CONTAINER,
+      },
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Step 2: Upload Files in Controller
+
+```typescript
+// upload.controller.ts
+import { Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('upload')
+export class UploadController {
+  // Single file upload
+  @Post('single')
+  @UseInterceptors(FileStorageInterceptor('file'))
+  uploadSingle(@Body() body: any) {
+    // File key is automatically added to body.file
+    return {
+      message: 'File uploaded successfully',
+      fileKey: body.file,
+    };
+  }
+
+  // Multiple files upload
+  @Post('multiple')
+  @UseInterceptors(
+    FileStorageInterceptor({
+      type: 'array',
+      fieldName: 'files',
+      maxCount: 10,
+    })
+  )
+  uploadMultiple(@Body() body: any) {
+    // File keys are automatically added to body.files as array
+    return {
+      message: 'Files uploaded successfully',
+      fileKeys: body.files,
+    };
+  }
+
+  // Multiple fields
+  @Post('fields')
+  @UseInterceptors(
+    FileStorageInterceptor({
+      type: 'fields',
+      fields: [
+        { name: 'avatar', maxCount: 1 },
+        { name: 'photos', maxCount: 5 },
+      ],
+    })
+  )
+  uploadFields(@Body() body: any) {
+    return {
+      message: 'Files uploaded successfully',
+      avatar: body.avatar,
+      photos: body.photos,
+    };
   }
 }
 ```
 
-## ⚙️ Configuration
-
-### TypeORM Example
+### Step 3: Use File Storage Service
 
 ```typescript
-// seeder.config.ts
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User, Post, Comment } from './src/entities';
-import { UserSeeder, PostSeeder, CommentSeeder } from './src/seeders';
-
-export default {
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST || 'localhost',
-      port: parseInt(process.env.DB_PORT) || 5432,
-      username: process.env.DB_USER || 'postgres',
-      password: process.env.DB_PASSWORD || 'postgres',
-      database: process.env.DB_NAME || 'mydb',
-      entities: [User, Post, Comment],
-      synchronize: true,
-    }),
-    TypeOrmModule.forFeature([User, Post, Comment]),
-  ],
-  seeders: [UserSeeder, PostSeeder, CommentSeeder],
-};
-```
-
-### MongoDB/Mongoose Example
-
-```typescript
-// seeder.config.ts
-import { MongooseModule } from '@nestjs/mongoose';
-import { User, UserSchema } from './src/schemas/user.schema';
-import { UserSeeder } from './src/seeders/user.seeder';
-
-export default {
-  imports: [
-    MongooseModule.forRoot('mongodb://localhost/mydb'),
-    MongooseModule.forFeature([
-      { name: User.name, schema: UserSchema }
-    ]),
-  ],
-  seeders: [UserSeeder],
-};
-```
-
-### SQLite Example
-
-```typescript
-// seeder.config.ts
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { User } from './src/entities/user.entity';
-import { UserSeeder } from './src/seeders/user.seeder';
-
-export default {
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'sqlite',
-      database: 'database.sqlite',
-      entities: [User],
-      synchronize: true,
-    }),
-    TypeOrmModule.forFeature([User]),
-  ],
-  seeders: [UserSeeder],
-};
-```
-
-## 🏭 Factories
-
-### Basic Factory
-
-```typescript
-import { Factory } from '@ackplus/nest-file-storage';
-
-export class UserFactory {
-  @Factory((faker) => faker.person.fullName())
-  name: string;
-
-  @Factory((faker) => faker.internet.email())
-  email: string;
-
-  @Factory((faker) => faker.datatype.number({ min: 18, max: 80 }))
-  age: number;
-}
-```
-
-### Using Factory
-
-```typescript
-import { DataFactory } from '@ackplus/nest-file-storage';
-import { UserFactory } from './user.factory';
-
-// Create factory
-const factory = DataFactory.createForClass(UserFactory);
-
-// Generate one object
-const user = factory.generate(1)[0];
-
-// Generate multiple objects
-const users = factory.generate(10);
-
-// Generate with overrides
-const admin = factory.generate(1, { role: 'admin' })[0];
-```
-
-### Factory with Relationships
-
-```typescript
-import { Factory } from '@ackplus/nest-file-storage';
-
-export class PostFactory {
-  @Factory((faker) => faker.lorem.sentence())
-  title: string;
-
-  @Factory((faker) => faker.lorem.paragraphs(3))
-  content: string;
-
-  // Will be set manually in seeder
-  authorId: number;
-}
-```
-
-## 🌱 Seeders
-
-### Basic Seeder
-
-```typescript
+// file.service.ts
 import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Seeder, DataFactory } from '@ackplus/nest-file-storage';
-import { User } from '../entities/user.entity';
-import { UserFactory } from '../factories/user.factory';
+import { FileStorageService } from '@ackplus/nest-file-storage';
 
 @Injectable()
-export class UserSeeder implements Seeder {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-  ) {}
-
-  async seed(): Promise<void> {
-    const factory = DataFactory.createForClass(UserFactory);
-    const users = factory.generate(10);
-    await this.userRepository.save(users);
+export class FileService {
+  // Get file
+  async getFile(key: string): Promise<Buffer> {
+    const storage = await FileStorageService.getStorage();
+    return await storage.getFile(key);
   }
 
-  async drop(): Promise<void> {
-    await this.userRepository.delete({});
+  // Delete file
+  async deleteFile(key: string): Promise<void> {
+    const storage = await FileStorageService.getStorage();
+    await storage.deleteFile(key);
+  }
+
+  // Copy file
+  async copyFile(oldKey: string, newKey: string) {
+    const storage = await FileStorageService.getStorage();
+    return await storage.copyFile(oldKey, newKey);
+  }
+
+  // Get public URL
+  async getFileUrl(key: string): Promise<string> {
+    const storage = await FileStorageService.getStorage();
+    return storage.getUrl(key);
+  }
+
+  // Get signed URL (S3 only)
+  async getSignedUrl(key: string): Promise<string> {
+    const storage = await FileStorageService.getStorage();
+    if ('getSignedUrl' in storage) {
+      return await storage.getSignedUrl(key, { expiresIn: 3600 });
+    }
+    return storage.getUrl(key);
   }
 }
 ```
 
-### Seeder with Relationships
+## 📚 Configuration Options
+
+### Local Storage Options
 
 ```typescript
-import { Injectable } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Seeder, DataFactory } from '@ackplus/nest-file-storage';
-import { User } from '../entities/user.entity';
-import { Post } from '../entities/post.entity';
-import { UserFactory } from '../factories/user.factory';
-import { PostFactory } from '../factories/post.factory';
+interface LocalStorageOptions {
+  rootPath: string; // Directory to store files
+  baseUrl: string; // Base URL for file access
+  prefix?: string; // Optional prefix for file keys
+  fileName?: (file: any, req: Request) => string; // Custom file naming
+  fileDist?: (file: any, req: Request) => string; // Custom directory structure
+  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
+}
+```
 
-@Injectable()
-export class PostSeeder implements Seeder {
-  constructor(
-    @InjectRepository(User)
-    private readonly userRepository: Repository<User>,
-    @InjectRepository(Post)
-    private readonly postRepository: Repository<Post>,
-  ) {}
+### S3 Storage Options
 
-  async seed(): Promise<void> {
-    // Get existing users
-    const users = await this.userRepository.find();
-    
-    if (users.length === 0) {
-      console.log('⚠️  No users found. Run UserSeeder first.');
-      return;
+```typescript
+interface S3StorageOptions {
+  accessKeyId: string; // AWS access key
+  secretAccessKey: string; // AWS secret key
+  region: string; // AWS region
+  bucket: string; // S3 bucket name
+  endpoint?: string; // Custom S3 endpoint (for S3-compatible services)
+  cloudFrontUrl?: string; // CloudFront distribution URL
+  prefix?: string; // Optional prefix for file keys
+  fileName?: (file: any, req: Request) => string; // Custom file naming
+  fileDist?: (file: any, req: Request) => string; // Custom directory structure
+  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
+}
+```
+
+### Azure Storage Options
+
+```typescript
+interface AzureStorageOptions {
+  account: string; // Azure storage account name
+  accountKey: string; // Azure storage account key
+  container: string; // Container name
+  prefix?: string; // Optional prefix for file keys
+  fileName?: (file: any, req: Request) => string; // Custom file naming
+  fileDist?: (file: any, req: Request) => string; // Custom directory structure
+  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
+}
+```
+
+## 🎨 Advanced Usage
+
+### Custom File Naming
+
+```typescript
+NestFileStorageModule.forRoot({
+  storage: FileStorageEnum.LOCAL,
+  localConfig: {
+    rootPath: './uploads',
+    baseUrl: 'http://localhost:3000/uploads',
+    fileName: (file, req) => {
+      // Custom file name with timestamp
+      const timestamp = Date.now();
+      const ext = file.originalname.split('.').pop();
+      return `${timestamp}-${file.originalname}`;
+    },
+  },
+})
+```
+
+### Custom Directory Structure
+
+```typescript
+NestFileStorageModule.forRoot({
+  storage: FileStorageEnum.LOCAL,
+  localConfig: {
+    rootPath: './uploads',
+    baseUrl: 'http://localhost:3000/uploads',
+    fileDist: (file, req) => {
+      // Organize by year/month/day
+      const date = new Date();
+      return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
+    },
+  },
+})
+```
+
+### Transform Uploaded File Object
+
+```typescript
+NestFileStorageModule.forRoot({
+  storage: FileStorageEnum.S3,
+  s3Config: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+    region: process.env.AWS_REGION,
+    bucket: process.env.AWS_BUCKET,
+    transformUploadedFileObject: (file) => {
+      // Return only specific fields
+      return {
+        key: file.key,
+        url: file.url,
+        size: file.size,
+        mimetype: file.mimetype,
+      };
+    },
+  },
+})
+```
+
+### Custom File Mapping in Interceptor
+
+```typescript
+@Post('upload')
+@UseInterceptors(
+  FileStorageInterceptor('file', {
+    mapToRequestBody: (file, fieldName, req) => {
+      // Return full file object instead of just key
+      return file;
+    },
+  })
+)
+uploadFile(@Body() body: any) {
+  // body.file now contains the full file object
+  return {
+    message: 'File uploaded',
+    file: body.file,
+  };
+}
+```
+
+### Async Configuration
+
+```typescript
+// app.module.ts
+NestFileStorageModule.forRootAsync({
+  imports: [ConfigModule],
+  useFactory: async (configService: ConfigService) => ({
+    storage: FileStorageEnum.S3,
+    s3Config: {
+      accessKeyId: configService.get('AWS_ACCESS_KEY_ID'),
+      secretAccessKey: configService.get('AWS_SECRET_ACCESS_KEY'),
+      region: configService.get('AWS_REGION'),
+      bucket: configService.get('AWS_BUCKET'),
+    },
+  }),
+  inject: [ConfigService],
+})
+```
+
+### Dynamic Storage Type
+
+```typescript
+// Override storage type per route
+@Post('upload-to-s3')
+@UseInterceptors(
+  FileStorageInterceptor('file', {
+    storageType: FileStorageEnum.S3,
+  })
+)
+uploadToS3(@Body() body: any) {
+  return { fileKey: body.file };
+}
+```
+
+## 🔥 Complete Examples
+
+### Image Upload with Validation
+
+```typescript
+import { Controller, Post, UseInterceptors, BadRequestException } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('images')
+export class ImageController {
+  @Post('upload')
+  @UseInterceptors(
+    FileStorageInterceptor('image', {
+      fileName: (file, req) => {
+        // Validate image type
+        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
+        if (!allowedTypes.includes(file.mimetype)) {
+          throw new BadRequestException('Only image files are allowed');
+        }
+        
+        // Generate unique filename
+        const timestamp = Date.now();
+        const ext = file.originalname.split('.').pop();
+        return `image-${timestamp}.${ext}`;
+      },
+      fileDist: (file, req) => {
+        // Organize by year/month
+        const date = new Date();
+        return `images/${date.getFullYear()}/${date.getMonth() + 1}`;
+      },
+    })
+  )
+  async uploadImage(@Body() body: any) {
+    return {
+      message: 'Image uploaded successfully',
+      imageKey: body.image,
+    };
+  }
+}
+```
+
+### User Avatar Upload
+
+```typescript
+import { Controller, Post, UseInterceptors, Body } from '@nestjs/common';
+import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
+
+@Controller('users')
+export class UserController {
+  constructor(private readonly userService: UserService) {}
+
+  @Post('avatar')
+  @UseInterceptors(
+    FileStorageInterceptor('avatar', {
+      fileName: (file, req) => {
+        const userId = req.user.id; // Assuming user from auth guard
+        const ext = file.originalname.split('.').pop();
+        return `avatar-${userId}.${ext}`;
+      },
+      fileDist: () => 'avatars',
+    })
+  )
+  async uploadAvatar(@Body() body: any, @Request() req) {
+    // Delete old avatar if exists
+    const user = await this.userService.findById(req.user.id);
+    if (user.avatarKey) {
+      const storage = await FileStorageService.getStorage();
+      await storage.deleteFile(user.avatarKey);
     }
 
-    // Create posts for each user
-    const postFactory = DataFactory.createForClass(PostFactory);
-    
-    for (const user of users) {
-      // Generate 3 posts per user
-      const posts = postFactory.generate(3).map(post => ({
-        ...post,
-        author: user,
-      }));
-      
-      await this.postRepository.save(posts);
-    }
-    
-    console.log(`✅ Seeded ${users.length * 3} posts`);
-  }
+    // Update user with new avatar
+    await this.userService.updateAvatar(req.user.id, body.avatar);
 
-  async drop(): Promise<void> {
-    await this.postRepository.delete({});
+    return {
+      message: 'Avatar updated successfully',
+      avatarKey: body.avatar,
+    };
   }
 }
 ```
 
-### Conditional Seeding
+### Document Management
 
 ```typescript
-import { Injectable } from '@nestjs/common';
-import { Seeder, SeederServiceOptions, DataFactory } from '@ackplus/nest-file-storage';
+import { Controller, Get, Post, Delete, Param, UseInterceptors, Body } from '@nestjs/common';
+import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
 
-@Injectable()
-export class UserSeeder implements Seeder {
-  async seed(options?: SeederServiceOptions): Promise<void> {
-    const factory = DataFactory.createForClass(UserFactory);
+@Controller('documents')
+export class DocumentController {
+  @Post('upload')
+  @UseInterceptors(
+    FileStorageInterceptor({
+      type: 'array',
+      fieldName: 'documents',
+      maxCount: 10,
+    }, {
+      fileDist: () => 'documents',
+      mapToRequestBody: (files, fieldName) => {
+        // Return detailed file info
+        return files;
+      },
+    })
+  )
+  async uploadDocuments(@Body() body: any) {
+    return {
+      message: `${body.documents.length} documents uploaded`,
+      documents: body.documents,
+    };
+  }
+
+  @Get(':key/download')
+  async downloadDocument(@Param('key') key: string, @Res() res) {
+    const storage = await FileStorageService.getStorage();
+    const file = await storage.getFile(key);
     
-    // Seed more data if dummyData flag is set
-    const count = options?.dummyData ? 100 : 10;
-    const users = factory.generate(count);
+    res.setHeader('Content-Type', 'application/octet-stream');
+    res.setHeader('Content-Disposition', `attachment; filename="${key}"`);
+    res.send(file);
+  }
+
+  @Delete(':key')
+  async deleteDocument(@Param('key') key: string) {
+    const storage = await FileStorageService.getStorage();
+    await storage.deleteFile(key);
     
-    await this.userRepository.save(users);
-    console.log(`✅ Seeded ${count} users`);
+    return { message: 'Document deleted successfully' };
   }
 
-  async drop(): Promise<void> {
-    await this.userRepository.delete({});
-  }
-}
-```
-
-Run with dummy data:
-
-```bash
-nest-seed -c seeder.config.ts --dummyData
-```
-
-### MongoDB/Mongoose Seeder
-
-```typescript
-import { Injectable } from '@nestjs/common';
-import { InjectModel } from '@nestjs/mongoose';
-import { Model } from 'mongoose';
-import { Seeder, DataFactory } from '@ackplus/nest-file-storage';
-import { User } from '../schemas/user.schema';
-import { UserFactory } from '../factories/user.factory';
-
-@Injectable()
-export class UserSeeder implements Seeder {
-  constructor(
-    @InjectModel(User.name)
-    private readonly userModel: Model<User>,
-  ) {}
-
-  async seed(): Promise<void> {
-    const factory = DataFactory.createForClass(UserFactory);
-    const users = factory.generate(10);
-    await this.userModel.insertMany(users);
-  }
-
-  async drop(): Promise<void> {
-    await this.userModel.deleteMany({});
-  }
-}
-```
-
-## 🔥 Advanced Examples
-
-### Custom Providers in Config
-
-```typescript
-// seeder.config.ts
-import { CustomService } from './src/services/custom.service';
-
-export default {
-  imports: [
-    TypeOrmModule.forRoot({ /* ... */ }),
-    TypeOrmModule.forFeature([User]),
-  ],
-  seeders: [UserSeeder],
-  providers: [CustomService], // Inject custom services
-};
-```
-
-### Environment-Based Configuration
-
-```typescript
-// seeder.config.ts
-import * as dotenv from 'dotenv';
-dotenv.config();
-
-const isDev = process.env.NODE_ENV === 'development';
-
-export default {
-  imports: [
-    TypeOrmModule.forRoot({
-      type: 'postgres',
-      host: process.env.DB_HOST,
-      database: isDev ? 'mydb_dev' : 'mydb_prod',
-      synchronize: isDev,
-    }),
-    TypeOrmModule.forFeature([User, Post]),
-  ],
-  seeders: isDev 
-    ? [UserSeeder, PostSeeder, TestDataSeeder]
-    : [UserSeeder, PostSeeder],
-};
-```
-
-### Batch Insert for Performance
-
-```typescript
-@Injectable()
-export class UserSeeder implements Seeder {
-  async seed(): Promise<void> {
-    const factory = DataFactory.createForClass(UserFactory);
-    const batchSize = 1000;
-    const totalRecords = 10000;
+  @Get(':key/url')
+  async getDocumentUrl(@Param('key') key: string) {
+    const storage = await FileStorageService.getStorage();
+    const url = storage.getUrl(key);
     
-    for (let i = 0; i < totalRecords; i += batchSize) {
-      const users = factory.generate(batchSize);
-      await this.userRepository.save(users);
-      console.log(`✅ Seeded ${Math.min(i + batchSize, totalRecords)}/${totalRecords} users`);
-    }
-  }
-
-  async drop(): Promise<void> {
-    await this.userRepository.delete({});
+    return { url };
   }
 }
 ```
 
 ## 📚 API Reference
 
-### DataFactory
+### FileStorageService
 
 ```typescript
-class DataFactory {
-  // Create factory for a class
-  static createForClass<T>(factoryClass: new () => T): DataFactory<T>
+class FileStorageService {
+  // Get storage instance
+  static async getStorage(storageType?: FileStorageEnum): Promise<Storage>
   
-  // Generate instances
-  generate(count: number, override?: Partial<T>): T[]
-}
-```
-
-### Seeder Interface
-
-```typescript
-interface Seeder {
-  // Seed data into database
-  seed(options?: SeederServiceOptions): Promise<void>
+  // Get module options
+  static getOptions(): FileStorageModuleOptions
   
-  // Drop/clear data from database
-  drop(options?: SeederServiceOptions): Promise<void>
+  // Set module options
+  static setOptions(options: FileStorageModuleOptions): void
 }
 ```
 
-### @Factory Decorator
+### Storage Interface
 
 ```typescript
-// Simple factory
-@Factory((faker) => faker.person.fullName())
-name: string;
-
-// With options
-@Factory((faker) => faker.datatype.number({ min: 1, max: 100 }))
-age: number;
-
-// Array values
-@Factory((faker) => faker.helpers.arrayElement(['admin', 'user']))
-role: string;
+interface Storage {
+  // Get file content as Buffer
+  getFile(key: string): Promise<Buffer> | Buffer
+  
+  // Delete file
+  deleteFile(key: string): Promise<void> | void
+  
+  // Upload file
+  putFile(fileContent: Buffer, key: string): Promise<UploadedFile> | UploadedFile
+  
+  // Copy file
+  copyFile(oldKey: string, newKey: string): Promise<UploadedFile>
+  
+  // Get file URL
+  getUrl(key: string): Promise<string> | string
+  
+  // Get signed URL (S3 only)
+  getSignedUrl?(key: string, options: any): Promise<string> | string
+  
+  // Get file path (Local only)
+  path?(filePath: string): Promise<string> | string
+}
 ```
 
-### SeederServiceOptions
+### FileStorageInterceptor
 
 ```typescript
-interface SeederServiceOptions {
-  refresh?: boolean;      // Drop before seeding
-  name?: string[];        // Run specific seeders
-  dummyData?: boolean;    // Custom flag for your logic
+// Single file upload
+FileStorageInterceptor(
+  fieldName: string,
+  options?: FileStorageInterceptorOptions
+)
+
+// Multiple files or fields
+FileStorageInterceptor(
+  config: {
+    type: 'single' | 'array' | 'fields';
+    fieldName?: string;
+    maxCount?: number;
+    fields?: { name: string; maxCount?: number }[];
+  },
+  options?: FileStorageInterceptorOptions
+)
+```
+
+### UploadedFile Interface
+
+```typescript
+interface UploadedFile {
+  fieldName?: string;      // Form field name
+  fileName: string;        // Generated file name
+  originalName: string;    // Original file name
+  size: number;           // File size in bytes
+  mimetype?: string;      // MIME type
+  buffer?: Buffer;        // File buffer (optional)
+  key: string;           // Storage key/path
+  url: string;           // Public URL
+  fullPath: string;      // Full storage path
+  encoding?: string;     // File encoding
 }
+```
+
+## 🧪 Testing
+
+```typescript
+import { Test, TestingModule } from '@nestjs/testing';
+import { NestFileStorageModule, FileStorageService, FileStorageEnum } from '@ackplus/nest-file-storage';
+
+describe('FileService', () => {
+  let service: FileService;
+  let storage: Storage;
+
+  beforeEach(async () => {
+    const module: TestingModule = await Test.createTestingModule({
+      imports: [
+        NestFileStorageModule.forRoot({
+          storage: FileStorageEnum.LOCAL,
+          localConfig: {
+            rootPath: './test-uploads',
+            baseUrl: 'http://localhost:3000/test-uploads',
+          },
+        }),
+      ],
+      providers: [FileService],
+    }).compile();
+
+    service = module.get<FileService>(FileService);
+    storage = await FileStorageService.getStorage();
+  });
+
+  it('should upload file', async () => {
+    const buffer = Buffer.from('test content');
+    const result = await storage.putFile(buffer, 'test/file.txt');
+    
+    expect(result.key).toBe('test/file.txt');
+    expect(result.size).toBeGreaterThan(0);
+  });
+
+  it('should delete file', async () => {
+    const buffer = Buffer.from('test content');
+    await storage.putFile(buffer, 'test/file.txt');
+    
+    await storage.deleteFile('test/file.txt');
+    
+    await expect(storage.getFile('test/file.txt')).rejects.toThrow();
+  });
+});
 ```
 
 ## 🤝 Contributing
@@ -601,15 +648,15 @@ This project is licensed under the MIT License.
 ## 🙏 Acknowledgments
 
 - Built with [NestJS](https://nestjs.com/)
-- Powered by [Faker.js](https://fakerjs.dev/)
-- Inspired by database seeding patterns from Laravel and other frameworks
+- Uses [Multer](https://github.com/expressjs/multer) for file handling
+- AWS S3 support via [@aws-sdk/client-s3](https://www.npmjs.com/package/@aws-sdk/client-s3)
+- Azure support via [@azure/storage-blob](https://www.npmjs.com/package/@azure/storage-blob)
 
 ## 📮 Support
 
 If you have any questions or need help:
-- Open an issue on [GitHub](https://github.com/ackplus/nest-file-storage/issues)
+- Open an issue on [GitHub](https://github.com/ack-solutions/nest-file-storage/issues)
 - Check the [examples](./examples/) directory
-- Review the [Quick Start Guide](./QUICKSTART.md)
 
 ---
 
