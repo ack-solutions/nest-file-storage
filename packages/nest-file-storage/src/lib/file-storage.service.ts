@@ -29,7 +29,7 @@ export class FileStorageService {
         if (!storageType) {
             storageType = configOptions.storage;
         }
-        const config = (configOptions as any)[`Config`];
+        const config = (configOptions as any)[`${storageType}Config`];
         return await StorageFactory.createStorage(storageType, config);
     }
 
