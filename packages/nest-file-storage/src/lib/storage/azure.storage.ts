@@ -43,54 +43,64 @@ export class AzureStorage implements StorageEngine, Storage {
         );
     }
 
-    async _handleFile(
+    _handleFile(
         req: any,
         file: any,
         cb: (error?: any, info?: any) => void,
-    ): Promise<void> {
-        try {
-            const dist = await this.fileDistFunction(file, req);
-            const key = await this.fileNameFunction(file, req);
-            const filePath = join(dist, key);
+    ): void {
+        void (async () => {
+            try {
+                const dist = await this.fileDistFunction(file, req);
+                const key = await this.fileNameFunction(file, req);
+                const filePath = join(dist, key);
 
-            file.stream.pipe(concat({ encoding: 'buffer' }, async (buffer) => {
-                const uploadedFile = await this.putFile(buffer, filePath);
+                file.stream.pipe(concat({ encoding: 'buffer' }, (buffer) => {
+                    void (async () => {
+                        try {
+                            const uploadedFile = await this.putFile(buffer, filePath);
 
-                const fileInfo: UploadedFile = {
-                    ...uploadedFile,
-                    fieldName: file.fieldname,
-                    originalName: file.originalname,
-                    mimetype: file.mimetype,
-                };
-                let transformData = fileInfo;
+                            const fileInfo: UploadedFile = {
+                                ...uploadedFile,
+                                fieldName: file.fieldname,
+                                originalName: file.originalname,
+                                mimetype: file.mimetype,
+                            };
+                            let transformData = fileInfo;
 
-                if (this.options?.transformUploadedFileObject) {
-                    transformData = await this.options.transformUploadedFileObject(fileInfo);
-                }
-                cb(null, transformData);
-            }));
-        } catch (error) {
-            cb(error);
-        }
+                            if (this.options?.transformUploadedFileObject) {
+                                transformData = await this.options.transformUploadedFileObject(fileInfo);
+                            }
+                            cb(null, transformData);
+                        } catch (error) {
+                            cb(error);
+                        }
+                    })();
+                }));
 
-        file.stream.on('error', (err: any) => cb(err));
+                file.stream.on('error', (err: any) => cb(err));
+            } catch (error) {
+                cb(error);
+            }
+        })();
     }
 
-    async _removeFile(
+    _removeFile(
         _req: any,
         file: any,
         cb: (error: Error | null) => void,
-    ): Promise<void> {
-        try {
-            const blobClient = this.blobServiceClient
-                .getContainerClient(this.options.container)
-                .getBlobClient(file.key);
+    ): void {
+        void (async () => {
+            try {
+                const blobClient = this.blobServiceClient
+                    .getContainerClient(this.options.container)
+                    .getBlobClient(file.key);
 
-            await blobClient.delete();
-            cb(null);
-        } catch (error) {
-            cb(error);
-        }
+                await blobClient.delete();
+                cb(null);
+            } catch (error) {
+                cb(error);
+            }
+        })();
     }
 
     getUrl(key: string): string {

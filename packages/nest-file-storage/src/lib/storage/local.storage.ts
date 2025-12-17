@@ -73,39 +73,49 @@ export class LocalStorage implements StorageEngine, Storage {
         }
     }
 
-     _handleFile(
+    _handleFile(
         req: any,
         file: Express.Multer.File,
         cb: (error?: any, info?: any) => void,
     ): void {
-        try {
-            const dist = await this.fileDistFunction(file, req);
-            const fileName = await this.fileNameFunction(file, req);
+        const run = async () => {
+            try {
+                const dist = await this.fileDistFunction(file, req);
+                const fileName = await this.fileNameFunction(file, req);
 
-            const filePath = join(dist, fileName);
-            // Convert to URL-friendly key for storage
-            const urlKey = this.pathToUrl(filePath);
+                const filePath = join(dist, fileName);
+                // Convert to URL-friendly key for storage
+                const urlKey = this.pathToUrl(filePath);
 
-            file.stream.pipe(concat({ encoding: 'buffer' }, async (buffer) => {
-                const uploadedFile = await this.putFile(buffer, urlKey);
+                file.stream.pipe(concat({ encoding: 'buffer' }, (buffer) => {
+                    void (async () => {
+                        try {
+                            const uploadedFile = await this.putFile(buffer, urlKey);
 
-                const fileInfo: UploadedFile = {
-                    ...uploadedFile,
-                    fieldName: file.fieldname,
-                    originalName: file.originalname,
-                    mimetype: file.mimetype,
-                };
-                let transformData = fileInfo;
+                            const fileInfo: UploadedFile = {
+                                ...uploadedFile,
+                                fieldName: file.fieldname,
+                                originalName: file.originalname,
+                                mimetype: file.mimetype,
+                            };
+                            let transformData = fileInfo;
 
-                if (this.options?.transformUploadedFileObject) {
-                    transformData = await this.options.transformUploadedFileObject(fileInfo);
-                }
-                cb(null, transformData);
-            }));
-        } catch (error) {
-            console.error('error', error);
-            cb(error);
-        }
+                            if (this.options?.transformUploadedFileObject) {
+                                transformData = await this.options.transformUploadedFileObject(fileInfo);
+                            }
+                            cb(null, transformData);
+                        } catch (error) {
+                            cb(error);
+                        }
+                    })();
+                }));
+            } catch (error) {
+                console.error('error', error);
+                cb(error);
+            }
+        };
+
+        run().catch(cb);
     }
 
     _removeFile(
