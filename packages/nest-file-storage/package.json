@@ -1,6 +1,6 @@
 {
   "name": "@ackplus/nest-file-storage",
-  "version": "1.1.13",
+  "version": "1.1.15",
   "description": "A flexible and feature-rich file storage solution for NestJS applications with support for local, S3, and Azure Blob Storage",
   "author": "AckPlus",
   "license": "MIT",
