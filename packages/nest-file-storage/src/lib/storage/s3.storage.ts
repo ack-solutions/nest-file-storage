@@ -1,4 +1,4 @@
-import { CopyObjectCommand, GetObjectCommandInput, S3 } from '@aws-sdk/client-s3';
+import { CopyObjectCommand, GetObjectCommandInput, PutObjectCommandInput, S3 } from '@aws-sdk/client-s3';
 import { DeleteObjectCommand, GetObjectCommand, GetObjectCommandOutput, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import moment from 'moment';
@@ -36,39 +36,43 @@ export class S3Storage implements StorageEngine, Storage {
         });
     }
 
-    async _handleFile(
+    _handleFile(
         req: any,
         file: Express.Multer.File,
         cb: (error?: any, info?: any) => void,
-    ): Promise<void> {
+    ): void {
         // Collect file chunks to determine size
         const chunks: Uint8Array[] = [];
         file.stream.on('data', (chunk) => chunks.push(chunk));
-        file.stream.on('end', async () => {
-            const buffer = Buffer.concat(chunks);
+        file.stream.on('end', () => {
+            (async () => {
+                const buffer = Buffer.concat(chunks);
 
-            try {
-                const dist = await this.fileDistFunction(file, req);
-                const key = await this.fileNameFunction(file, req);
-                const filePath = join(dist, key);
+                try {
+                    const dist = await this.fileDistFunction(file, req);
+                    const key = await this.fileNameFunction(file, req);
+                    const filePath = join(dist, key);
 
-                const uploadedFile = await this.putFile(buffer, filePath);
+                    const uploadedFile = await this.putFile(buffer, filePath, {
+                        ContentType: file?.mimetype
+                    });
 
-                const fileInfo: UploadedFile = {
-                    ...uploadedFile,
-                    fieldName: file.fieldname,
-                    originalName: file.originalname,
-                    mimetype: file.mimetype,
-                };
-                let transformData = fileInfo;
+                    const fileInfo: UploadedFile = {
+                        ...uploadedFile,
+                        fieldName: file.fieldname,
+                        originalName: file.originalname,
+                        mimetype: file.mimetype,
+                    };
+                    let transformData = fileInfo;
 
-                if (this.options?.transformUploadedFileObject) {
-                    transformData = await this.options.transformUploadedFileObject(fileInfo);
+                    if (this.options?.transformUploadedFileObject) {
+                        transformData = await this.options.transformUploadedFileObject(fileInfo);
+                    }
+                    cb(null, transformData);
+                } catch (err) {
+                    cb(err);
                 }
-                cb(null, transformData);
-            } catch (err) {
-                cb(err);
-            }
+            })().catch((err) => cb(err));
         });
 
         file.stream.on('error', (err) => cb(err));
@@ -142,7 +146,7 @@ export class S3Storage implements StorageEngine, Storage {
     }
 
 
-    async putFile(fileContent: Buffer, key: string): Promise<any> {
+    async putFile(fileContent: Buffer, key: string, options?: Partial<PutObjectCommandInput>): Promise<any> {
         try {
             const fileName = basename(key);
             const fileKey = key || (Math.random() + 1).toString(36).substring(12);
@@ -162,6 +166,7 @@ export class S3Storage implements StorageEngine, Storage {
                 Body: fileContent,
                 // Use the safeAscii for 'filename' and encoded for 'filename*'
                 ContentDisposition: `inline; filename="${safeAscii}"; filename*=UTF-8''${encodedFileName}`,
+                ...options,
             };
 
             await this.s3.send(new PutObjectCommand(putParams));

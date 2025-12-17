@@ -2,9 +2,7 @@ import concat from 'concat-stream';
 import * as fs from 'fs';
 import moment from 'moment';
 import { StorageEngine } from 'multer';
-import * as path from 'path';
-import { basename, dirname, join, normalize, sep } from 'path';
-import { join as posixJoin } from 'path/posix';
+import { dirname, join, normalize, sep } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import { LocalStorageOptions, Storage, UploadedFile } from '../types';
@@ -75,11 +73,11 @@ export class LocalStorage implements StorageEngine, Storage {
         }
     }
 
-    async _handleFile(
+     _handleFile(
         req: any,
         file: Express.Multer.File,
         cb: (error?: any, info?: any) => void,
-    ) {
+    ): void {
         try {
             const dist = await this.fileDistFunction(file, req);
             const fileName = await this.fileNameFunction(file, req);
@@ -157,6 +155,7 @@ export class LocalStorage implements StorageEngine, Storage {
     async putFile(
         fileContent: Buffer,
         urlKey: string,
+        options?: any,
     ): Promise<UploadedFile> {
         return new Promise((putFileResolve, reject) => {
             // Convert URL key to OS-specific path
@@ -183,6 +182,7 @@ export class LocalStorage implements StorageEngine, Storage {
                     key: urlKey,
                     url: this.getUrl(urlKey),
                     fullPath: filePath,
+                    ...options,
                 };
                 putFileResolve(fileInfo);
             });

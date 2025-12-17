@@ -95,7 +95,7 @@ export interface UploadedFile {
 export interface Storage {
     getFile(key: string): Promise<Buffer> | Buffer;
     deleteFile(key: string): Promise<void> | void;
-    putFile(fileContent: Buffer, key: string): Promise<UploadedFile> | UploadedFile;
+    putFile(fileContent: Buffer, key: string, options?: any): Promise<UploadedFile> | UploadedFile;
     path?(filePath: string): Promise<string> | string;
     getUrl(key: string): Promise<string> | string;
     getSignedUrl?(key: string, options: any): Promise<string> | string;

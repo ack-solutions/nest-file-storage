@@ -149,7 +149,7 @@ export class AzureStorage implements StorageEngine, Storage {
         });
     }
 
-    async putFile(buffer: Buffer, key: string): Promise<UploadedFile> {
+    async putFile(buffer: Buffer, key: string, options?: any): Promise<UploadedFile> {
         try {
             const containerClient = this.blobServiceClient.getContainerClient(this.options.container);
             const blockBlobClient = containerClient.getBlockBlobClient(key);
@@ -164,6 +164,7 @@ export class AzureStorage implements StorageEngine, Storage {
                 key,
                 fullPath: key,
                 url: this.getUrl(key),
+                ...options,
             };
 
             return fileInfo;
