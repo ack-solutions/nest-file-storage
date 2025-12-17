@@ -147,12 +147,21 @@ export class S3Storage implements StorageEngine, Storage {
             const fileName = basename(key);
             const fileKey = key || (Math.random() + 1).toString(36).substring(12);
 
+            // Clean the filename of characters that break header syntax (quotes and backslashes)
+            const safeAscii = fileName
+                .replace(/[^\x20-\x7E]/g, '_') // Replace non-ASCII with underscores
+                .replace(/["\\]/g, '_');        // Replace " and \ with underscores
+
+            const encodedFileName = encodeURIComponent(fileName);
+
+
             // Upload the file
             const putParams = {
                 Bucket: this.options.bucket,
                 Key: fileKey,
                 Body: fileContent,
-                ContentDisposition: `inline; ${fileName}`,
+                // Use the safeAscii for 'filename' and encoded for 'filename*'
+                ContentDisposition: `inline; filename="${safeAscii}"; filename*=UTF-8''${encodedFileName}`,
             };
 
             await this.s3.send(new PutObjectCommand(putParams));
