@@ -1,6 +1,6 @@
 {
   "name": "example-app",
-  "version": "1.1.13-beta.1",
+  "version": "1.1.13-beta.2",
   "description": "Example app demonstrating @ackplus/nest-file-storage",
   "author": "AckPlus",
   "private": true,
