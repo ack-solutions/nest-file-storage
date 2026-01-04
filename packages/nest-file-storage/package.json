@@ -35,11 +35,10 @@
   },
   "homepage": "https://github.com/ack-solutions/nest-file-storage#readme",
   "scripts": {
-    "clean": "rm -rf dist",
-    "build": "npm run clean && nest build",
+    "clean": "rm -rf dist tsconfig.build.tsbuildinfo",
+    "build": "pnpm clean && pnpm -C ../.. exec tsc -p packages/nest-file-storage/tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "eslint \"src/**/*.ts\" --fix",
-    "prepublishOnly": "npm run build"
+    "lint": "eslint \"src/**/*.ts\" --fix"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.0.0 || ^11.0.0",
