@@ -41,6 +41,29 @@ function mapFileObject(file: any) {
     } as unknown as UploadedFile;
 }
 
+/**
+ * Collect array files from request.files when using multer.fields() for bracket notation.
+ * Supports both request.files['productImages'] and request.files['productImages[0]'], etc.
+ */
+function collectArrayFiles(
+    files: { [fieldname: string]: Express.Multer.File[] },
+    fieldName: string
+): Express.Multer.File[] {
+    const direct = files[fieldName];
+    if (direct && direct.length > 0) {
+        return direct;
+    }
+    const collected: Express.Multer.File[] = [];
+    let i = 0;
+    let key = `${fieldName}[${i}]`;
+    while (files[key] && files[key].length > 0) {
+        collected.push(files[key][0]);
+        i += 1;
+        key = `${fieldName}[${i}]`;
+    }
+    return collected;
+}
+
 // Helper function to apply file mapping with callback
 function applyFileKeyMapping(
     request: Request,
@@ -65,9 +88,16 @@ function applyFileKeyMapping(
             request.body[fieldName] = mapCallback(mappedFile, fieldName, request);
         }
     } else if (fileConfig.type === 'array') {
-        const files = request.files as Express.Multer.File[];
-        if (files && files.length > 0) {
-            const fieldName = fileConfig.fieldName || 'files';
+        const fieldName = fileConfig.fieldName || 'files';
+        let files: Express.Multer.File[];
+        if (Array.isArray(request.files)) {
+            files = request.files;
+        } else if (request.files && typeof request.files === 'object') {
+            files = collectArrayFiles(request.files as { [fieldname: string]: Express.Multer.File[] }, fieldName);
+        } else {
+            files = [];
+        }
+        if (files.length > 0) {
             const mappedFiles = files.map(file => mapFileObject(file));
             request.body[fieldName] = mapCallback(mappedFiles, fieldName, request);
         }
@@ -143,12 +173,20 @@ export function FileStorageInterceptor(
                     }
                     multerMiddleware = multerInstance.single(fileConfig.fieldName);
                     break;
-                case 'array':
+                case 'array': {
                     if (!fileConfig.fieldName) {
                         throw new Error('fieldName is required for multiple file upload.');
                     }
-                    multerMiddleware = multerInstance.array(fileConfig.fieldName, fileConfig.maxCount);
+                    const maxCount = fileConfig.maxCount ?? 10;
+                    const baseName = fileConfig.fieldName;
+                    // Accept both "productImages" (repeated) and "productImages[0]", "productImages[1]", ...
+                    const fields: { name: string; maxCount: number }[] = [
+                        { name: baseName, maxCount },
+                        ...Array.from({ length: maxCount }, (_, i) => ({ name: `${baseName}[${i}]`, maxCount: 1 })),
+                    ];
+                    multerMiddleware = multerInstance.fields(fields);
                     break;
+                }
                 case 'fields':
                     if (!fileConfig.fields || !Array.isArray(fileConfig.fields)) {
                         throw new Error('fields array is required for multiple fields file upload.');
