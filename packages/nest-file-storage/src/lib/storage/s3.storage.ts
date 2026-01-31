@@ -27,8 +27,7 @@ export class S3Storage implements StorageEngine, Storage {
         });
 
         this.s3 = new S3({
-            ...(this.options.endpoint ? { endpoint: this.options.endpoint } : {}),
-            region: this.options.region,
+            ...(this.options ?? {}),
             credentials: {
                 accessKeyId: this.options.accessKeyId,
                 secretAccessKey: this.options.secretAccessKey,
