@@ -7,12 +7,18 @@ import {
     StorageSharedKeyCredential,
 } from '@azure/storage-blob';
 import concat from 'concat-stream';
-import moment from 'moment';
 import { StorageEngine } from 'multer';
 import path, { basename, join } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import { AzureStorageOptions, Storage, UploadedFile } from '../types';
+
+function getYYYYMMDD(date: Date = new Date()): { yyyy: string; mm: string; dd: string } {
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return { yyyy, mm, dd };
+}
 
 
 export class AzureStorage implements StorageEngine, Storage {
@@ -29,7 +35,8 @@ export class AzureStorage implements StorageEngine, Storage {
         });
 
         this.fileDistFunction = options.fileDist || ((_file, _req) => {
-            return path.join('uploads', moment().format('YYYY'), moment().format('MM'), moment().format('DD'));
+            const { yyyy, mm, dd } = getYYYYMMDD();
+            return path.join('uploads', yyyy, mm, dd);
         });
 
         const sharedKeyCredential = new StorageSharedKeyCredential(

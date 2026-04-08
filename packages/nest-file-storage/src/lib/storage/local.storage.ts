@@ -1,11 +1,17 @@
 import concat from 'concat-stream';
 import * as fs from 'fs';
-import moment from 'moment';
 import { StorageEngine } from 'multer';
 import { dirname, join, normalize, sep } from 'path';
 import { v4 as uuidv4 } from 'uuid';
 
 import { LocalStorageOptions, Storage, UploadedFile } from '../types';
+
+function getYYYYMMDD(date: Date = new Date()): { yyyy: string; mm: string; dd: string } {
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return { yyyy, mm, dd };
+}
 
 
 export class LocalStorage implements StorageEngine, Storage {
@@ -63,7 +69,8 @@ export class LocalStorage implements StorageEngine, Storage {
         });
 
         this.fileDistFunction = options.fileDist || ((_file, _req) => {
-            return join(this.rootPath, moment().format('YYYY'), moment().format('MM'), moment().format('DD'));
+            const { yyyy, mm, dd } = getYYYYMMDD();
+            return join(this.rootPath, yyyy, mm, dd);
         });
 
 

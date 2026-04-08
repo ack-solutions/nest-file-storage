@@ -1,7 +1,6 @@
 import { CopyObjectCommand, GetObjectCommandInput, PutObjectCommandInput, S3 } from '@aws-sdk/client-s3';
 import { DeleteObjectCommand, GetObjectCommand, GetObjectCommandOutput, HeadObjectCommand, PutObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import moment from 'moment';
 import { StorageEngine } from 'multer';
 import path, { basename, join } from 'path';
 import { Readable } from 'stream';
@@ -9,6 +8,13 @@ import { v4 as uuidv4 } from 'uuid';
 
 
 import { S3StorageOptions, Storage, UploadedFile } from '../types';
+
+function getYYYYMMDD(date: Date = new Date()): { yyyy: string; mm: string; dd: string } {
+    const yyyy = String(date.getFullYear());
+    const mm = String(date.getMonth() + 1).padStart(2, '0');
+    const dd = String(date.getDate()).padStart(2, '0');
+    return { yyyy, mm, dd };
+}
 
 
 export class S3Storage implements StorageEngine, Storage {
@@ -23,7 +29,8 @@ export class S3Storage implements StorageEngine, Storage {
         });
 
         this.fileDistFunction = options.fileDist || ((_file, _req) => {
-            return path.join('uploads', moment().format('YYYY'), moment().format('MM'), moment().format('DD'));
+            const { yyyy, mm, dd } = getYYYYMMDD();
+            return path.join('uploads', yyyy, mm, dd);
         });
 
         this.s3 = new S3({
