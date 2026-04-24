@@ -1,274 +1,81 @@
-# @ackplus/nest-file-storage
+# nest-file-storage
 
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
-</p>
+Monorepo for `@ackplus/nest-file-storage`, a NestJS library for uploading files to Local storage, AWS S3, and Azure Blob Storage.
 
-<p align="center">A flexible and feature-rich file storage solution for NestJS applications</p>
+The package-level developer guide lives in [`packages/nest-file-storage/README.md`](./packages/nest-file-storage/README.md). Start there if you want to use the library in an application.
 
-<p align="center">
-  <a href="https://www.npmjs.com/package/@ackplus/nest-file-storage"><img src="https://img.shields.io/npm/v/@ackplus/nest-file-storage.svg" alt="NPM Version" /></a>
-  <a href="https://www.npmjs.com/package/@ackplus/nest-file-storage"><img src="https://img.shields.io/npm/l/@ackplus/nest-file-storage.svg" alt="Package License" /></a>
-  <a href="https://www.npmjs.com/package/@ackplus/nest-file-storage"><img src="https://img.shields.io/npm/dm/@ackplus/nest-file-storage.svg" alt="NPM Downloads" /></a>
-</p>
+## Workspace Layout
 
-## 📦 About
+```text
+.
+|-- packages/nest-file-storage/   # Published library
+|-- apps/example-app/             # Runnable NestJS example app
+|-- QUICK_START.md                # Short repo setup commands
+|-- SETUP.md                      # Additional local setup notes
+`-- scripts/publish.js            # Publish helper
+```
 
-`@ackplus/nest-file-storage` is a comprehensive file storage solution for NestJS applications that supports multiple storage providers including Local Storage, AWS S3, and Azure Blob Storage. Upload, download, delete, and manage files with ease.
+## Main Docs
 
-### Key Features
+- Library guide: [`packages/nest-file-storage/README.md`](./packages/nest-file-storage/README.md)
+- Example app guide: [`apps/example-app/README.md`](./apps/example-app/README.md)
+- Package examples: [`packages/nest-file-storage/examples/`](./packages/nest-file-storage/examples/)
 
-- 📦 **Multiple Storage Providers** - Local, AWS S3, and Azure Blob Storage
-- 🔄 **Easy Switching** - Switch between providers with minimal configuration
-- 🎯 **NestJS Integration** - Seamless integration with decorators and interceptors
-- 📁 **File Operations** - Upload, download, delete, copy files
-- 🔐 **Signed URLs** - Generate presigned URLs for secure access (S3)
-- 🎨 **Customizable** - Custom file naming and directory structure
-- ✅ **Type-Safe** - Full TypeScript support
+## Local Development
 
-## 📦 Installation
+Install workspace dependencies:
 
 ```bash
-npm install @ackplus/nest-file-storage
-```
-
-**For AWS S3:**
-```bash
-npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
-```
-
-**For Azure Blob Storage:**
-```bash
-npm install @azure/storage-blob
-```
-
-## 🚀 Quick Example
-
-**1. Configure Module:**
-
-```typescript
-// app.module.ts
-import { Module } from '@nestjs/common';
-import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
-
-@Module({
-  imports: [
-    NestFileStorageModule.forRoot({
-      storage: FileStorageEnum.LOCAL,
-      localConfig: {
-        rootPath: './uploads',
-        baseUrl: 'http://localhost:3000/uploads',
-      },
-    }),
-  ],
-})
-export class AppModule {}
-```
-
-**2. Upload Files in Controller:**
-
-```typescript
-// upload.controller.ts
-import { Controller, Post, UseInterceptors, Body } from '@nestjs/common';
-import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
-
-@Controller('upload')
-export class UploadController {
-  @Post('single')
-  @UseInterceptors(FileStorageInterceptor('file'))
-  uploadSingle(@Body() body: any) {
-    return {
-      message: 'File uploaded successfully',
-      fileKey: body.file, // File key automatically added
-    };
-  }
-}
-```
-
-**3. Manage Files with Service:**
-
-```typescript
-// file.service.ts
-import { Injectable } from '@nestjs/common';
-import { FileStorageService } from '@ackplus/nest-file-storage';
-
-@Injectable()
-export class FileService {
-  async getFile(key: string): Promise<Buffer> {
-    const storage = await FileStorageService.getStorage();
-    return await storage.getFile(key);
-  }
-
-  async deleteFile(key: string): Promise<void> {
-    const storage = await FileStorageService.getStorage();
-    await storage.deleteFile(key);
-  }
-}
-```
-
-**Done! 🎉**
-
-## 📚 Documentation
-
-### Package Documentation
-
-- **[📖 Complete Documentation](./packages/nest-file-storage/README.md)** - Full guide with all features
-- **[📁 Examples](./packages/nest-file-storage/examples/)** - 10 detailed examples covering all use cases
-
-### Example Application
-
-See a complete working example:
-- **[Example App](./apps/example-app/)** - Working implementation with file upload/download
-
-## 🛠️ Local Development
-
-This section is for contributors working on the package itself.
-
-### Setup
-
-```bash
-# Clone repository
-git clone https://github.com/ack-solutions/nest-file-storage.git
-cd nest-file-storage
-
-# Install dependencies
 pnpm install
-
-# Build package
-pnpm -C packages/nest-file-storage build
 ```
 
-### Project Structure
-
-```
-nest-file-storage/
-├── packages/
-│   └── nest-file-storage/          # 📦 Main package
-│       ├── src/                    # Source code
-│       │   ├── lib/
-│       │   │   ├── storage/        # Storage implementations
-│       │   │   ├── interceptor/    # File upload interceptor
-│       │   │   ├── file-storage.service.ts
-│       │   │   ├── nest-file-storage.module.ts
-│       │   │   └── types.ts
-│       │   └── index.ts
-│       ├── dist/                   # Compiled output
-│       ├── examples/               # 10 example files
-│       └── README.md               # Package documentation
-├── apps/
-│   └── example-app/                # 🧪 Example application
-│       └── src/                    # Working example
-├── scripts/
-│   └── publish.js                  # Publishing script
-└── package.json                    # Root workspace
-```
-
-### Development Workflow
+Build the library:
 
 ```bash
-# Build package
-pnpm -C packages/nest-file-storage build
-
-# Run example app (if implemented)
-cd apps/example-app
-pnpm start:dev
-
-# Make changes and test
 pnpm -C packages/nest-file-storage build
 ```
 
-### Watch Mode (Multi-Terminal)
-
-For active development, run these in separate terminals:
+Build the example app after the library build finishes:
 
 ```bash
-# Terminal 1: Build watch
-pnpm -C packages/nest-file-storage build --watch
+pnpm -C apps/example-app build
+```
 
-# Terminal 2: App development
+Run the example app:
+
+```bash
 pnpm -C apps/example-app start:dev
 ```
 
-### Publishing
+Useful URLs once the app is running:
+
+- App: `http://localhost:3000`
+- Swagger UI: `http://localhost:3000/api`
+
+## Contributor Notes
+
+- The package publishes the compiled `dist` output plus the package README and examples.
+- The example app consumes the workspace package, so build the package before building the app.
+- Local uploads in the example app are written under `apps/example-app/uploads`.
+- The example app demonstrates upload and storage APIs, but local files are not automatically exposed as static assets unless you add static serving yourself.
+
+## Testing
+
+Current workspace testing is centered around the example app:
 
 ```bash
-# Interactive version bump and publish
-npm run publish
-
-# The script will:
-# 1. Ask for version type (patch/minor/major)
-# 2. Build package
-# 3. Update version
-# 4. Publish to npm
-```
-
-## 🧪 Testing
-
-```bash
-# Package tests
-pnpm -C packages/nest-file-storage test
-
-# Example app tests
 pnpm -C apps/example-app test
+pnpm -C apps/example-app test:e2e
 ```
 
-## 🎯 Use Cases
+The package itself does not currently define a dedicated test script in `packages/nest-file-storage/package.json`.
 
-- **User Avatars** - Upload and manage user profile pictures
-- **Document Management** - Handle document uploads and downloads
-- **Image Gallery** - Store and serve images
-- **File Sharing** - Build file sharing features
-- **Media Storage** - Store videos, audio, and other media
-- **Backup Systems** - Store backups across different providers
+## Publishing
 
-## 🤝 Contributing
+The repo includes a publish helper:
 
-Contributions are welcome!
+```bash
+pnpm run publish
+```
 
-**Quick steps:**
-1. Fork the repo
-2. Create a branch (`git checkout -b feature/amazing-feature`)
-3. Make your changes
-4. Build and test (`pnpm -C packages/nest-file-storage build`)
-5. Commit changes (`git commit -m 'Add amazing feature'`)
-6. Push to branch (`git push origin feature/amazing-feature`)
-7. Open a Pull Request
-
-## 📄 License
-
-MIT License - see [LICENSE](./packages/nest-file-storage/LICENSE)
-
-## 🔗 Links
-
-- **[NPM Package](https://www.npmjs.com/package/@ackplus/nest-file-storage)**
-- **[GitHub Repository](https://github.com/ack-solutions/nest-file-storage)**
-- **[Full Documentation](./packages/nest-file-storage/README.md)**
-- **[Issue Tracker](https://github.com/ack-solutions/nest-file-storage/issues)**
-
-## 🌟 Features by Storage Provider
-
-### Local Storage
-- ✅ File upload/download
-- ✅ File deletion
-- ✅ File copying
-- ✅ Get file path
-- ✅ Get public URL
-
-### AWS S3
-- ✅ File upload/download
-- ✅ File deletion
-- ✅ File copying
-- ✅ Get public URL
-- ✅ Generate signed URLs
-- ✅ CloudFront integration
-
-### Azure Blob Storage
-- ✅ File upload/download
-- ✅ File deletion
-- ✅ File copying
-- ✅ Get public URL
-- ✅ Container management
-
----
-
-Made with ❤️ for the NestJS community
+Review [`scripts/publish.js`](./scripts/publish.js) before using it in a release workflow.

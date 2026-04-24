@@ -157,18 +157,24 @@ function getStorageConfig(storageType: FileStorageEnum, options: FileStorageConf
  * key/url/fullPath at runtime; we read them optionally.
  */
 function mapFileObject(file: Express.Multer.File): UploadedFile {
-    const withMeta = file as MulterFileWithStorageMeta;
+    const withMeta = file as MulterFileWithStorageMeta & Partial<UploadedFile> & {
+        filename?: string;
+        originalName?: string;
+    };
+    const fileName = withMeta.filename ?? withMeta.fileName ?? file.originalname;
+    const originalName = file.originalname ?? withMeta.originalName ?? fileName;
+    const fullPath = withMeta.fullPath ?? file.path ?? withMeta.key ?? '';
+
     return {
         fieldName: file.fieldname,
-        originalName: file.originalname,
-        fileName: file.filename,
+        originalName,
+        fileName,
         mimetype: file.mimetype,
         size: file.size,
         key: withMeta.key ?? '',
-        path: file.path,
         url: withMeta.url ?? '',
         encoding: file.encoding,
-        fullPath: withMeta.fullPath ?? file.path ?? '',
+        fullPath,
     } as UploadedFile;
 }
 

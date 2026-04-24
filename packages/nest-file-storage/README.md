@@ -1,52 +1,72 @@
 # @ackplus/nest-file-storage
 
-A flexible and feature-rich file storage solution for NestJS applications with support for Local, AWS S3, and Azure Blob Storage.
+`@ackplus/nest-file-storage` is a NestJS file upload and storage library for Express-based applications. It connects Multer uploads to Local storage, AWS S3, or Azure Blob Storage and gives you one common runtime API for upload, read, delete, copy, and URL generation.
 
-## ✨ Features
+This README is the canonical developer guide for using the package in an application.
 
-- 📦 **Multiple Storage Providers** - Local, AWS S3, and Azure Blob Storage support
-- 🔄 **Easy Switching** - Switch between storage providers with minimal configuration
-- 🎯 **NestJS Integration** - Seamless integration with NestJS decorators and interceptors
-- 📁 **File Operations** - Upload, download, delete, copy files with ease
-- 🔐 **Signed URLs** - Generate presigned URLs for secure file access (S3)
-- 🎨 **Customizable** - Custom file naming, directory structure, and transformations
-- 📝 **TypeScript** - Full TypeScript support with type safety
-- 🧪 **Test-Friendly** - Easy to mock and test
+## What You Get
 
-## 📦 Installation
+- `NestFileStorageModule` to register the default storage provider.
+- `FileStorageInterceptor()` to accept multipart uploads in controllers.
+- `FileStorageService` to work with files programmatically.
+- Built-in storage adapters for `local`, `s3`, and `azure`.
+- Request-body mapping so uploaded file keys or metadata can flow into your DTO/service layer.
+
+## Compatibility And Prerequisites
+
+This library is designed for NestJS on the Express platform.
+
+Required in the consuming app:
+
+- `@nestjs/common`
+- `@nestjs/core`
+- `@nestjs/platform-express`
+- `multer`
+- `reflect-metadata`
+
+Peer dependency ranges exported by the package:
+
+- `@nestjs/common`: `^10.0.0 || ^11.0.0`
+- `@nestjs/core`: `^10.0.0 || ^11.0.0`
+- `multer`: `^1.4.5-lts.1 || ^2.0.0`
+- `reflect-metadata`: `^0.2.2`
+
+Optional provider packages:
+
+- AWS S3: `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner`
+- Azure Blob Storage: `@azure/storage-blob`
+
+## Installation
 
 ```bash
-npm install @ackplus/nest-file-storage
-# or
-pnpm add @ackplus/nest-file-storage
-# or
-yarn add @ackplus/nest-file-storage
+pnpm add @ackplus/nest-file-storage multer reflect-metadata
 ```
 
-**For AWS S3 support:**
+If your Nest app does not already include the Express platform package:
 
 ```bash
-npm install @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
+pnpm add @nestjs/platform-express
 ```
 
-**For Azure Blob Storage support:**
+For AWS S3 support:
 
 ```bash
-npm install @azure/storage-blob
+pnpm add @aws-sdk/client-s3 @aws-sdk/s3-request-presigner
 ```
 
-## 🚀 Quick Start
+For Azure Blob Storage support:
 
-### Step 1: Configure Module
+```bash
+pnpm add @azure/storage-blob
+```
 
-Choose your storage provider and configure the module:
+## Register The Module
 
-#### Local Storage
+### Local storage
 
-```typescript
-// app.module.ts
+```ts
 import { Module } from '@nestjs/common';
-import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
+import { FileStorageEnum, NestFileStorageModule } from '@ackplus/nest-file-storage';
 
 @Module({
   imports: [
@@ -62,22 +82,22 @@ import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-stora
 export class AppModule {}
 ```
 
-#### AWS S3
+### AWS S3
 
-```typescript
-// app.module.ts
+```ts
 import { Module } from '@nestjs/common';
-import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
+import { FileStorageEnum, NestFileStorageModule } from '@ackplus/nest-file-storage';
 
 @Module({
   imports: [
     NestFileStorageModule.forRoot({
       storage: FileStorageEnum.S3,
       s3Config: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-        region: process.env.AWS_REGION,
-        bucket: process.env.AWS_BUCKET,
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        region: process.env.AWS_REGION!,
+        bucket: process.env.AWS_BUCKET!,
+        cloudFrontUrl: process.env.AWS_CLOUDFRONT_URL,
       },
     }),
   ],
@@ -85,21 +105,20 @@ import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-stora
 export class AppModule {}
 ```
 
-#### Azure Blob Storage
+### Azure Blob Storage
 
-```typescript
-// app.module.ts
+```ts
 import { Module } from '@nestjs/common';
-import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
+import { FileStorageEnum, NestFileStorageModule } from '@ackplus/nest-file-storage';
 
 @Module({
   imports: [
     NestFileStorageModule.forRoot({
       storage: FileStorageEnum.AZURE,
       azureConfig: {
-        account: process.env.AZURE_STORAGE_ACCOUNT,
-        accountKey: process.env.AZURE_STORAGE_KEY,
-        container: process.env.AZURE_CONTAINER,
+        account: process.env.AZURE_STORAGE_ACCOUNT!,
+        accountKey: process.env.AZURE_STORAGE_KEY!,
+        container: process.env.AZURE_CONTAINER!,
       },
     }),
   ],
@@ -107,557 +126,590 @@ import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-stora
 export class AppModule {}
 ```
 
-### Step 2: Upload Files in Controller
+### Async configuration
 
-```typescript
-// upload.controller.ts
-import { Controller, Post, UseInterceptors } from '@nestjs/common';
-import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+```ts
+import { Module } from '@nestjs/common';
+import { ConfigModule, ConfigService } from '@nestjs/config';
+import { FileStorageEnum, NestFileStorageModule } from '@ackplus/nest-file-storage';
 
-@Controller('upload')
-export class UploadController {
-  // Single file upload
-  @Post('single')
-  @UseInterceptors(FileStorageInterceptor('file'))
-  uploadSingle(@Body() body: any) {
-    // File key is automatically added to body.file
+@Module({
+  imports: [
+    ConfigModule.forRoot(),
+    NestFileStorageModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: async (config: ConfigService) => ({
+        storage: FileStorageEnum.S3,
+        s3Config: {
+          accessKeyId: config.getOrThrow('AWS_ACCESS_KEY_ID'),
+          secretAccessKey: config.getOrThrow('AWS_SECRET_ACCESS_KEY'),
+          region: config.getOrThrow('AWS_REGION'),
+          bucket: config.getOrThrow('AWS_BUCKET'),
+        },
+      }),
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+### Example: build module options from one shared storage config
+
+If your app stores provider credentials in one common config record, map that record into the module options once and return the correct provider config.
+
+```ts
+import * as path from 'path';
+import { FileStorageEnum } from '@ackplus/nest-file-storage';
+
+function buildFileStorageOptions(config: {
+  type: FileStorageEnum;
+  endpoint?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+  region?: string;
+  bucket?: string;
+  cloudFrontUrl?: string;
+}, appConfig: { appUrl: string }) {
+  if (config.type === FileStorageEnum.S3) {
     return {
-      message: 'File uploaded successfully',
-      fileKey: body.file,
+      storage: FileStorageEnum.S3,
+      s3Config: {
+        endpoint: config.endpoint,
+        accessKeyId: config.accessKeyId!,
+        secretAccessKey: config.secretAccessKey!,
+        region: config.region!,
+        bucket: config.bucket!,
+        cloudFrontUrl: config.cloudFrontUrl,
+      },
     };
   }
 
-  // Multiple files upload
+  if (config.type === FileStorageEnum.AZURE) {
+    return {
+      storage: FileStorageEnum.AZURE,
+      azureConfig: {
+        account: config.accessKeyId!,
+        accountKey: config.secretAccessKey!,
+        container: config.bucket!,
+      },
+    };
+  }
+
+  return {
+    storage: FileStorageEnum.LOCAL,
+    localConfig: {
+      rootPath: path.join(process.cwd(), 'public'),
+      baseUrl: `${appConfig.appUrl}/public`,
+    },
+  };
+}
+```
+
+This pattern is useful when:
+
+- S3 uses `endpoint`, `accessKeyId`, `secretAccessKey`, `region`, `bucket`, and optional `cloudFrontUrl`.
+- Azure reuses the same credential source but maps `accessKeyId -> account`, `secretAccessKey -> accountKey`, and `bucket -> container`.
+- Local storage falls back to a public directory such as `process.cwd()/public`.
+
+## Local Storage Note: `baseUrl` Does Not Serve Files
+
+For local storage, `baseUrl` only controls the URL string returned by `getUrl()` and upload metadata. It does not expose the directory over HTTP by itself.
+
+If you want browser-accessible local files, add static serving in your Nest app:
+
+```bash
+pnpm add @nestjs/serve-static
+```
+
+```ts
+import { Module } from '@nestjs/common';
+import { ServeStaticModule } from '@nestjs/serve-static';
+import { join } from 'path';
+
+@Module({
+  imports: [
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads'),
+      serveRoot: '/uploads',
+    }),
+  ],
+})
+export class AppModule {}
+```
+
+Without this, local files can still be downloaded through your own controller endpoints.
+
+## Upload Files In Controllers
+
+`FileStorageInterceptor()` wraps Multer and uploads files into the configured storage engine before your route handler runs.
+
+All upload routes must accept `multipart/form-data`.
+
+### Default request-body mapping
+
+By default, the interceptor writes storage keys into `request.body`.
+
+| Upload mode | Accepted form field(s) | Default `body` value |
+| --- | --- | --- |
+| `FileStorageInterceptor('file')` | `file` | `body.file: string` |
+| `type: 'array'` | repeated `files` or `files[0]`, `files[1]`, ... | `body.files: string[]` |
+| `type: 'fields'` | each configured field name | `body[fieldName]: string[]` |
+
+Important behavior for `fields` mode:
+
+- Every configured field is mapped to an array.
+- That stays true even when `maxCount: 1`.
+
+DTO note:
+
+- Because the interceptor writes into `request.body` before your route handler executes, your DTO shape should match the mapped value.
+- Typical DTO fields are `string` for single uploads, `string[]` for array uploads, and custom object shapes when you use `mapToRequestBody`.
+
+### Single file upload
+
+```ts
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('files')
+export class FilesController {
+  @Post('single')
+  @UseInterceptors(FileStorageInterceptor('file'))
+  uploadSingle(@Body() body: { file: string }) {
+    return {
+      key: body.file,
+    };
+  }
+}
+```
+
+### Multiple files in one field
+
+```ts
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('files')
+export class FilesController {
   @Post('multiple')
   @UseInterceptors(
     FileStorageInterceptor({
       type: 'array',
       fieldName: 'files',
       maxCount: 10,
-    })
+    }),
   )
-  uploadMultiple(@Body() body: any) {
-    // File keys are automatically added to body.files as array
+  uploadMultiple(@Body() body: { files: string[] }) {
     return {
-      message: 'Files uploaded successfully',
-      fileKeys: body.files,
+      keys: body.files,
+      count: body.files.length,
     };
   }
+}
+```
 
-  // Multiple fields
+### Multiple named fields
+
+```ts
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('files')
+export class FilesController {
   @Post('fields')
   @UseInterceptors(
     FileStorageInterceptor({
       type: 'fields',
       fields: [
         { name: 'avatar', maxCount: 1 },
-        { name: 'photos', maxCount: 5 },
+        { name: 'attachments', maxCount: 5 },
       ],
-    })
+    }),
   )
-  uploadFields(@Body() body: any) {
-    return {
-      message: 'Files uploaded successfully',
-      avatar: body.avatar,
-      photos: body.photos,
-    };
+  uploadFields(@Body() body: { avatar: string[]; attachments: string[] }) {
+    return body;
   }
 }
 ```
 
-### Step 3: Use File Storage Service
+## Validation
 
-```typescript
-// file.service.ts
-import { Injectable } from '@nestjs/common';
-import { FileStorageService } from '@ackplus/nest-file-storage';
+Use the interceptor options for validation, not the module registration.
 
-@Injectable()
-export class FileService {
-  // Get file
-  async getFile(key: string): Promise<Buffer> {
-    const storage = await FileStorageService.getStorage();
-    return await storage.getFile(key);
-  }
+### File size and mime type validation
 
-  // Delete file
-  async deleteFile(key: string): Promise<void> {
-    const storage = await FileStorageService.getStorage();
-    await storage.deleteFile(key);
-  }
+Use `multerOptions()` when you want Multer to reject invalid uploads before your route handler runs.
 
-  // Copy file
-  async copyFile(oldKey: string, newKey: string) {
-    const storage = await FileStorageService.getStorage();
-    return await storage.copyFile(oldKey, newKey);
-  }
+```ts
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Post,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
 
-  // Get public URL
-  async getFileUrl(key: string): Promise<string> {
-    const storage = await FileStorageService.getStorage();
-    return storage.getUrl(key);
-  }
-
-  // Get signed URL (S3 only)
-  async getSignedUrl(key: string): Promise<string> {
-    const storage = await FileStorageService.getStorage();
-    if ('getSignedUrl' in storage) {
-      return await storage.getSignedUrl(key, { expiresIn: 3600 });
-    }
-    return storage.getUrl(key);
+@Controller('images')
+export class ImagesController {
+  @Post()
+  @UseInterceptors(
+    FileStorageInterceptor('image', {
+      multerOptions: () => ({
+        limits: {
+          fileSize: 5 * 1024 * 1024,
+        },
+        fileFilter: (_req, file, cb) => {
+          const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+          if (!allowed.includes(file.mimetype)) {
+            return cb(new BadRequestException('Only JPEG, PNG, and WebP files are allowed'), false);
+          }
+          cb(null, true);
+        },
+      }),
+      fileDist: () => 'images',
+    }),
+  )
+  upload(@Body() body: { image: string }) {
+    return body;
   }
 }
 ```
 
-## 📚 Configuration Options
+### Cross-field or post-upload validation
 
-### Local Storage Options
+Use `afterUpload()` when validation depends on the final uploaded file list or multiple fields together.
 
-```typescript
-interface LocalStorageOptions {
-  rootPath: string; // Directory to store files
-  baseUrl: string; // Base URL for file access
-  prefix?: string; // Optional prefix for file keys
-  fileName?: (file: any, req: Request) => string; // Custom file naming
-  fileDist?: (file: any, req: Request) => string; // Custom directory structure
-  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
+```ts
+import { BadRequestException, Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('gallery')
+export class GalleryController {
+  @Post()
+  @UseInterceptors(
+    FileStorageInterceptor(
+      {
+        type: 'fields',
+        fields: [
+          { name: 'cover', maxCount: 1 },
+          { name: 'images', maxCount: 10 },
+        ],
+      },
+      {
+        afterUpload: (req) => {
+          const files = req.files as Record<string, Express.Multer.File[]>;
+          const imageCount = files?.images?.length ?? 0;
+          if (imageCount < 2) {
+            throw new BadRequestException('At least 2 gallery images are required.');
+          }
+        },
+      },
+    ),
+  )
+  create(@Body() body: { cover: string[]; images: string[] }) {
+    return body;
+  }
 }
 ```
 
-### S3 Storage Options
+Practical guidance:
 
-```typescript
-interface S3StorageOptions {
-  accessKeyId: string; // AWS access key
-  secretAccessKey: string; // AWS secret key
-  region: string; // AWS region
-  bucket: string; // S3 bucket name
-  endpoint?: string; // Custom S3 endpoint (for S3-compatible services)
-  cloudFrontUrl?: string; // CloudFront distribution URL
-  prefix?: string; // Optional prefix for file keys
-  fileName?: (file: any, req: Request) => string; // Custom file naming
-  fileDist?: (file: any, req: Request) => string; // Custom directory structure
-  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
-}
+- Use `limits.fileSize` for upload size limits.
+- Use `fileFilter` for mime-type or extension checks.
+- Use `afterUpload` for rules involving multiple files or fields.
+- Do not rely on `file.size` inside `fileName()`; Multer size limits are the reliable way to cap upload size.
+
+## Control The Stored Path And Key
+
+Two callbacks define where the file is stored and what key is saved:
+
+- `fileDist(file, req)`: the directory or path prefix.
+- `fileName(file, req)`: the final filename segment.
+
+The final key is effectively:
+
+```text
+<fileDist>/<fileName>
 ```
 
-### Azure Storage Options
+### Default key generation
 
-```typescript
-interface AzureStorageOptions {
-  account: string; // Azure storage account name
-  accountKey: string; // Azure storage account key
-  container: string; // Container name
-  prefix?: string; // Optional prefix for file keys
-  fileName?: (file: any, req: Request) => string; // Custom file naming
-  fileDist?: (file: any, req: Request) => string; // Custom directory structure
-  transformUploadedFileObject?: (file: any) => any; // Transform uploaded file object
-}
+If you do not override anything:
+
+- Local storage stores files under `rootPath/YYYY/MM/DD`.
+- S3 and Azure store files under `uploads/YYYY/MM/DD`.
+- The default filename is `uuid-originalname`.
+
+Examples:
+
+- Local key: `2026/04/23/2d0b8f6e-report.pdf`
+- S3 key: `uploads/2026/04/23/2d0b8f6e-report.pdf`
+
+### Custom path and filename
+
+```ts
+import { extname } from 'path';
+
+FileStorageInterceptor('avatar', {
+  fileDist: (_file, req) => `users/${req.user.id}/avatars`,
+  fileName: (file) => `${Date.now()}${extname(file.originalname)}`,
+});
 ```
 
-## 🎨 Advanced Usage
+This gives you keys such as:
 
-### Custom File Naming
-
-```typescript
-NestFileStorageModule.forRoot({
-  storage: FileStorageEnum.LOCAL,
-  localConfig: {
-    rootPath: './uploads',
-    baseUrl: 'http://localhost:3000/uploads',
-    fileName: (file, req) => {
-      // Custom file name with timestamp
-      const timestamp = Date.now();
-      const ext = file.originalname.split('.').pop();
-      return `${timestamp}-${file.originalname}`;
-    },
-  },
-})
+```text
+users/42/avatars/1713876155123.png
 ```
 
-### Custom Directory Structure
+Use `fileDist` for folder structure and `fileName` for the last path segment. That is the most reliable way to control saved keys in the current implementation.
 
-```typescript
-NestFileStorageModule.forRoot({
-  storage: FileStorageEnum.LOCAL,
-  localConfig: {
-    rootPath: './uploads',
-    baseUrl: 'http://localhost:3000/uploads',
-    fileDist: (file, req) => {
-      // Organize by year/month/day
-      const date = new Date();
-      return `${date.getFullYear()}/${date.getMonth() + 1}/${date.getDate()}`;
-    },
-  },
-})
-```
+## Map Upload Results Into `request.body`
 
-### Transform Uploaded File Object
+The default mapping stores only keys. If you want richer metadata in the controller body, use `mapToRequestBody`.
 
-```typescript
-NestFileStorageModule.forRoot({
-  storage: FileStorageEnum.S3,
-  s3Config: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
-    region: process.env.AWS_REGION,
-    bucket: process.env.AWS_BUCKET,
-    transformUploadedFileObject: (file) => {
-      // Return only specific fields
-      return {
+### Return metadata instead of just the key
+
+```ts
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('documents')
+export class DocumentsController {
+  @Post()
+  @UseInterceptors(
+    FileStorageInterceptor('document', {
+      mapToRequestBody: (file) => ({
         key: file.key,
         url: file.url,
         size: file.size,
         mimetype: file.mimetype,
-      };
-    },
-  },
-})
-```
-
-### Custom File Mapping in Interceptor
-
-```typescript
-@Post('upload')
-@UseInterceptors(
-  FileStorageInterceptor('file', {
-    mapToRequestBody: (file, fieldName, req) => {
-      // Return full file object instead of just key
-      return file;
-    },
-  })
-)
-uploadFile(@Body() body: any) {
-  // body.file now contains the full file object
-  return {
-    message: 'File uploaded',
-    file: body.file,
-  };
-}
-```
-
-### Async Configuration
-
-```typescript
-// app.module.ts
-NestFileStorageModule.forRootAsync({
-  imports: [ConfigModule],
-  useFactory: async (configService: ConfigService) => ({
-    storage: FileStorageEnum.S3,
-    s3Config: {
-      accessKeyId: configService.get('AWS_ACCESS_KEY_ID'),
-      secretAccessKey: configService.get('AWS_SECRET_ACCESS_KEY'),
-      region: configService.get('AWS_REGION'),
-      bucket: configService.get('AWS_BUCKET'),
-    },
-  }),
-  inject: [ConfigService],
-})
-```
-
-### Dynamic Storage Type
-
-```typescript
-// Override storage type per route
-@Post('upload-to-s3')
-@UseInterceptors(
-  FileStorageInterceptor('file', {
-    storageType: FileStorageEnum.S3,
-  })
-)
-uploadToS3(@Body() body: any) {
-  return { fileKey: body.file };
-}
-```
-
-## 🔥 Complete Examples
-
-### Image Upload with Validation
-
-```typescript
-import { Controller, Post, UseInterceptors, BadRequestException } from '@nestjs/common';
-import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
-
-@Controller('images')
-export class ImageController {
-  @Post('upload')
-  @UseInterceptors(
-    FileStorageInterceptor('image', {
-      fileName: (file, req) => {
-        // Validate image type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif'];
-        if (!allowedTypes.includes(file.mimetype)) {
-          throw new BadRequestException('Only image files are allowed');
-        }
-        
-        // Generate unique filename
-        const timestamp = Date.now();
-        const ext = file.originalname.split('.').pop();
-        return `image-${timestamp}.${ext}`;
-      },
-      fileDist: (file, req) => {
-        // Organize by year/month
-        const date = new Date();
-        return `images/${date.getFullYear()}/${date.getMonth() + 1}`;
-      },
-    })
+        originalName: file.originalName,
+        fullPath: file.fullPath,
+      }),
+    }),
   )
-  async uploadImage(@Body() body: any) {
-    return {
-      message: 'Image uploaded successfully',
-      imageKey: body.image,
-    };
+  upload(@Body() body: any) {
+    return body.document;
   }
 }
 ```
 
-### User Avatar Upload
+### Preserve an existing body field
 
-```typescript
-import { Controller, Post, UseInterceptors, Body } from '@nestjs/common';
-import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
+If the request already contains a JSON/text field with the same name and you only want to populate it when missing:
 
-@Controller('users')
-export class UserController {
-  constructor(private readonly userService: UserService) {}
-
-  @Post('avatar')
-  @UseInterceptors(
-    FileStorageInterceptor('avatar', {
-      fileName: (file, req) => {
-        const userId = req.user.id; // Assuming user from auth guard
-        const ext = file.originalname.split('.').pop();
-        return `avatar-${userId}.${ext}`;
-      },
-      fileDist: () => 'avatars',
-    })
-  )
-  async uploadAvatar(@Body() body: any, @Request() req) {
-    // Delete old avatar if exists
-    const user = await this.userService.findById(req.user.id);
-    if (user.avatarKey) {
-      const storage = await FileStorageService.getStorage();
-      await storage.deleteFile(user.avatarKey);
-    }
-
-    // Update user with new avatar
-    await this.userService.updateAvatar(req.user.id, body.avatar);
-
-    return {
-      message: 'Avatar updated successfully',
-      avatarKey: body.avatar,
-    };
-  }
-}
-```
-
-### Document Management
-
-```typescript
-import { Controller, Get, Post, Delete, Param, UseInterceptors, Body } from '@nestjs/common';
-import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
-
-@Controller('documents')
-export class DocumentController {
-  @Post('upload')
-  @UseInterceptors(
-    FileStorageInterceptor({
-      type: 'array',
-      fieldName: 'documents',
-      maxCount: 10,
-    }, {
-      fileDist: () => 'documents',
-      mapToRequestBody: (files, fieldName) => {
-        // Return detailed file info
-        return files;
-      },
-    })
-  )
-  async uploadDocuments(@Body() body: any) {
-    return {
-      message: `${body.documents.length} documents uploaded`,
-      documents: body.documents,
-    };
-  }
-
-  @Get(':key/download')
-  async downloadDocument(@Param('key') key: string, @Res() res) {
-    const storage = await FileStorageService.getStorage();
-    const file = await storage.getFile(key);
-    
-    res.setHeader('Content-Type', 'application/octet-stream');
-    res.setHeader('Content-Disposition', `attachment; filename="${key}"`);
-    res.send(file);
-  }
-
-  @Delete(':key')
-  async deleteDocument(@Param('key') key: string) {
-    const storage = await FileStorageService.getStorage();
-    await storage.deleteFile(key);
-    
-    return { message: 'Document deleted successfully' };
-  }
-
-  @Get(':key/url')
-  async getDocumentUrl(@Param('key') key: string) {
-    const storage = await FileStorageService.getStorage();
-    const url = storage.getUrl(key);
-    
-    return { url };
-  }
-}
-```
-
-## 📚 API Reference
-
-### FileStorageService
-
-```typescript
-class FileStorageService {
-  // Get storage instance
-  static async getStorage(storageType?: FileStorageEnum): Promise<Storage>
-  
-  // Get module options
-  static getOptions(): FileStorageModuleOptions
-  
-  // Set module options
-  static setOptions(options: FileStorageModuleOptions): void
-}
-```
-
-### Storage Interface
-
-```typescript
-interface Storage {
-  // Get file content as Buffer
-  getFile(key: string): Promise<Buffer> | Buffer
-  
-  // Delete file
-  deleteFile(key: string): Promise<void> | void
-  
-  // Upload file
-  putFile(fileContent: Buffer, key: string): Promise<UploadedFile> | UploadedFile
-  
-  // Copy file
-  copyFile(oldKey: string, newKey: string): Promise<UploadedFile>
-  
-  // Get file URL
-  getUrl(key: string): Promise<string> | string
-  
-  // Get signed URL (S3 only)
-  getSignedUrl?(key: string, options: any): Promise<string> | string
-  
-  // Get file path (Local only)
-  path?(filePath: string): Promise<string> | string
-}
-```
-
-### FileStorageInterceptor
-
-```typescript
-// Single file upload
-FileStorageInterceptor(
-  fieldName: string,
-  options?: FileStorageInterceptorOptions
-)
-
-// Multiple files or fields
-FileStorageInterceptor(
-  config: {
-    type: 'single' | 'array' | 'fields';
-    fieldName?: string;
-    maxCount?: number;
-    fields?: { name: string; maxCount?: number }[];
-  },
-  options?: FileStorageInterceptorOptions
-)
-```
-
-### UploadedFile Interface
-
-```typescript
-interface UploadedFile {
-  fieldName?: string;      // Form field name
-  fileName: string;        // Generated file name
-  originalName: string;    // Original file name
-  size: number;           // File size in bytes
-  mimetype?: string;      // MIME type
-  buffer?: Buffer;        // File buffer (optional)
-  key: string;           // Storage key/path
-  url: string;           // Public URL
-  fullPath: string;      // Full storage path
-  encoding?: string;     // File encoding
-}
-```
-
-## 🧪 Testing
-
-```typescript
-import { Test, TestingModule } from '@nestjs/testing';
-import { NestFileStorageModule, FileStorageService, FileStorageEnum } from '@ackplus/nest-file-storage';
-
-describe('FileService', () => {
-  let service: FileService;
-  let storage: Storage;
-
-  beforeEach(async () => {
-    const module: TestingModule = await Test.createTestingModule({
-      imports: [
-        NestFileStorageModule.forRoot({
-          storage: FileStorageEnum.LOCAL,
-          localConfig: {
-            rootPath: './test-uploads',
-            baseUrl: 'http://localhost:3000/test-uploads',
-          },
-        }),
-      ],
-      providers: [FileService],
-    }).compile();
-
-    service = module.get<FileService>(FileService);
-    storage = await FileStorageService.getStorage();
-  });
-
-  it('should upload file', async () => {
-    const buffer = Buffer.from('test content');
-    const result = await storage.putFile(buffer, 'test/file.txt');
-    
-    expect(result.key).toBe('test/file.txt');
-    expect(result.size).toBeGreaterThan(0);
-  });
-
-  it('should delete file', async () => {
-    const buffer = Buffer.from('test content');
-    await storage.putFile(buffer, 'test/file.txt');
-    
-    await storage.deleteFile('test/file.txt');
-    
-    await expect(storage.getFile('test/file.txt')).rejects.toThrow();
-  });
+```ts
+FileStorageInterceptor('file', {
+  overwriteBodyField: false,
 });
 ```
 
-## 🤝 Contributing
+## Use `FileStorageService` Programmatically
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+`FileStorageService.getStorage()` gives you the active storage implementation so you can upload or manage files outside controller interceptors.
 
-## 📄 License
+```ts
+import { Injectable } from '@nestjs/common';
+import { FileStorageService } from '@ackplus/nest-file-storage';
 
-This project is licensed under the MIT License.
+@Injectable()
+export class DocumentStorageService {
+  async upload(buffer: Buffer, key: string) {
+    const storage = await FileStorageService.getStorage();
+    return storage.putFile(buffer, key);
+  }
 
-## 🙏 Acknowledgments
+  async get(key: string) {
+    const storage = await FileStorageService.getStorage();
+    return storage.getFile(key);
+  }
 
-- Built with [NestJS](https://nestjs.com/)
-- Uses [Multer](https://github.com/expressjs/multer) for file handling
-- AWS S3 support via [@aws-sdk/client-s3](https://www.npmjs.com/package/@aws-sdk/client-s3)
-- Azure support via [@azure/storage-blob](https://www.npmjs.com/package/@azure/storage-blob)
+  async remove(key: string) {
+    const storage = await FileStorageService.getStorage();
+    await storage.deleteFile(key);
+  }
 
-## 📮 Support
+  async copy(oldKey: string, newKey: string) {
+    const storage = await FileStorageService.getStorage();
+    return storage.copyFile(oldKey, newKey);
+  }
 
-If you have any questions or need help:
-- Open an issue on [GitHub](https://github.com/ack-solutions/nest-file-storage/issues)
-- Check the [examples](./examples/) directory
+  async url(key: string) {
+    const storage = await FileStorageService.getStorage();
+    return storage.getUrl(key);
+  }
 
----
+  async signedUrl(key: string) {
+    const storage = await FileStorageService.getStorage();
+    if ('getSignedUrl' in storage && storage.getSignedUrl) {
+      return storage.getSignedUrl(key, { expiresIn: 3600 });
+    }
+    return storage.getUrl(key);
+  }
+}
+```
 
-Made with ❤️ for the NestJS community
+### Get full URL from a stored key/path
+
+If you save only the storage key in your database, generate the public URL later with `getUrl(key)`. This works across Local, S3, and Azure.
+
+```ts
+import { Injectable } from '@nestjs/common';
+import { FileStorageService } from '@ackplus/nest-file-storage';
+
+@Injectable()
+export class FileUrlService {
+  async getUrlFromKey(key?: string | null): Promise<string | null> {
+    if (!key) {
+      return null;
+    }
+
+    const storage = await FileStorageService.getStorage();
+    return await Promise.resolve(storage.getUrl(key));
+  }
+}
+```
+
+### Add full URLs after loading entities
+
+The usual pattern is to store only `fileKey` in the entity and attach the final URL after fetching data.
+
+```ts
+import { Injectable } from '@nestjs/common';
+import { FileStorageService } from '@ackplus/nest-file-storage';
+
+type UserRecord = {
+  id: number;
+  avatarKey?: string | null;
+};
+
+@Injectable()
+export class UsersResponseMapper {
+  async mapUser(user: UserRecord) {
+    const storage = await FileStorageService.getStorage();
+
+    return {
+      ...user,
+      avatarUrl: user.avatarKey
+        ? await Promise.resolve(storage.getUrl(user.avatarKey))
+        : null,
+    };
+  }
+}
+```
+
+For entity-based applications:
+
+- Store the key/path in the entity, for example `avatarKey` or `documentKey`.
+- Build the full URL in a service, mapper, serializer, or response DTO step after loading the entity.
+- This is usually cleaner than doing URL generation inside ORM entity hooks, because `FileStorageService.getStorage()` is async.
+
+### Provider capability summary
+
+| Method | Local | S3 | Azure |
+| --- | --- | --- | --- |
+| `putFile()` | yes | yes | yes |
+| `getFile()` | yes | yes | yes |
+| `deleteFile()` | yes | yes | yes |
+| `copyFile()` | yes | yes | yes |
+| `getUrl()` | yes | yes | yes |
+| `getSignedUrl()` | no | yes | yes |
+| `path()` | yes | no | no |
+
+## Route-Level Storage Override
+
+You can override the storage provider per route.
+
+```ts
+import { Body, Controller, Post, UseInterceptors } from '@nestjs/common';
+import { FileStorageEnum, FileStorageInterceptor } from '@ackplus/nest-file-storage';
+
+@Controller('avatars')
+export class AvatarController {
+  @Post()
+  @UseInterceptors(
+    FileStorageInterceptor('avatar', {
+      storageType: FileStorageEnum.S3,
+      storageOptions: {
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+        region: process.env.AWS_REGION!,
+        bucket: process.env.AWS_BUCKET!,
+        fileDist: (_file, req) => `users/${req.user.id}/avatars`,
+      },
+      mapToRequestBody: (file) => ({
+        key: file.key,
+        url: file.url,
+      }),
+    }),
+  )
+  upload(@Body() body: any) {
+    return body.avatar;
+  }
+}
+```
+
+Important behavior:
+
+- If the route uses the same provider as the module default, `storageOptions` can override pieces of that provider config.
+- If the route uses a different provider than the module default, pass the full config for that provider inside `storageOptions`.
+
+## Configuration Reference
+
+### Common file options
+
+These are shared by Local, S3, and Azure configs:
+
+- `fileName(file, req)`: return the filename segment.
+- `fileDist(file, req)`: return the folder/path prefix.
+- `transformUploadedFileObject(file)`: transform the raw uploaded file object returned by the storage engine before Multer stores it.
+
+### Local config
+
+- `rootPath`: local directory where files are written.
+- `baseUrl`: URL prefix used by `getUrl()`.
+- Common file options listed above.
+
+### S3 config
+
+- `accessKeyId`
+- `secretAccessKey`
+- `region`
+- `bucket`
+- `endpoint`: optional custom S3-compatible endpoint.
+- `cloudFrontUrl`: optional CDN/public URL prefix used by `getUrl()`.
+- Common file options listed above.
+
+### Azure config
+
+- `account`
+- `accountKey`
+- `container`
+- Common file options listed above.
+
+Azure note:
+
+- `getSignedUrl()` generates a SAS URL by default.
+- If `AZURE_CDN_DOMAIN_NAME` is set in the runtime environment, the Azure storage adapter returns `AZURE_CDN_DOMAIN_NAME/<key>` instead of a SAS URL.
+
+## Current Behavior Notes
+
+- This package is implemented for NestJS with Express and Multer. It is not a Fastify-targeted integration.
+- In `fields` mode, each field is mapped to an array even when `maxCount` is `1`.
+- `baseUrl` is only a URL prefix. Add static serving yourself for direct local-file access.
+- The exported types include a `prefix` option, but `fileDist` and `fileName` are the reliable hooks for controlling saved paths in the current implementation.
+- The module stores one provider configuration at a time. For per-route provider switching, use `storageType` with `storageOptions`.
+- The custom `storageFactory` module option is best treated as an advanced service-level hook. The controller upload flow documented here is the built-in path for Local, S3, and Azure storage.
+
+## Examples And Workspace Docs
+
+- Package examples: [`examples/`](./examples/)
+- Workspace overview: [`../../README.md`](../../README.md)
+- Example app: [`../../apps/example-app/README.md`](../../apps/example-app/README.md)
+
+## License
+
+MIT
