@@ -1,175 +1,57 @@
 /**
  * Example 9: Dynamic Storage Selection
- * 
- * This example demonstrates how to dynamically choose storage provider
- * based on request, user preferences, or business logic.
+ *
+ * Choose the storage driver per request (by query, user plan, file type, …). Register the
+ * candidate drivers in the module, then select one by name on the route or in the service.
  */
 
-import { 
-  Controller, 
-  Post, 
-  UseInterceptors, 
-  Body,
-  Query,
-} from '@nestjs/common';
-import { 
-  FileStorageInterceptor, 
-  FileStorageEnum,
-} from '@ackplus/nest-file-storage';
+import { Controller, Post, UseInterceptors, Body, Injectable } from '@nestjs/common';
+import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
+
+// Assumes the module registered drivers named 'local' and 's3' (see examples 1–2).
 
 @Controller('upload')
 export class DynamicStorageController {
-  /**
-   * Upload to specific storage based on query parameter
-   * Example: POST /upload/dynamic?storage=s3
-   */
-  @Post('dynamic')
-  @UseInterceptors(
-    FileStorageInterceptor('file', {
-      // Storage type will be determined at runtime
-    })
-  )
-  uploadDynamic(
-    @Body() body: any,
-    @Query('storage') storage: string,
-  ) {
-    return {
-      message: 'File uploaded successfully',
-      storage,
-      fileKey: body.file,
-    };
+  /** Force a specific registered driver for this route. */
+  @Post('to-s3')
+  @UseInterceptors(FileStorageInterceptor('file', { driver: 's3' }))
+  uploadToS3(@Body() body: any) {
+    return { message: 'Uploaded to S3', fileKey: body.file };
   }
 
-  /**
-   * Upload large files to S3, small files to local storage
-   */
+  /** Pick the driver dynamically from the request (e.g. premium users -> s3). */
   @Post('smart')
   @UseInterceptors(
     FileStorageInterceptor('file', {
-      fileName: (file, req) => {
-        const timestamp = Date.now();
-        const ext = file.originalname.split('.').pop();
-        return `${timestamp}-${file.originalname}`;
-      },
-      // Determine storage based on file size
-      storageType: FileStorageEnum.LOCAL, // Can be overridden
+      driver: (req) => (req.user?.plan === 'premium' ? 's3' : 'local'),
     })
   )
   uploadSmart(@Body() body: any) {
-    return {
-      message: 'File uploaded successfully',
-      fileKey: body.file,
-    };
-  }
-
-  /**
-   * Upload to S3 explicitly (override default storage)
-   */
-  @Post('to-s3')
-  @UseInterceptors(
-    FileStorageInterceptor('file', {
-      storageType: FileStorageEnum.S3,
-    })
-  )
-  uploadToS3(@Body() body: any) {
-    return {
-      message: 'File uploaded to S3',
-      fileKey: body.file,
-    };
-  }
-
-  /**
-   * Upload to Azure explicitly
-   */
-  @Post('to-azure')
-  @UseInterceptors(
-    FileStorageInterceptor('file', {
-      storageType: FileStorageEnum.AZURE,
-    })
-  )
-  uploadToAzure(@Body() body: any) {
-    return {
-      message: 'File uploaded to Azure',
-      fileKey: body.file,
-    };
-  }
-
-  /**
-   * Upload to local storage explicitly
-   */
-  @Post('to-local')
-  @UseInterceptors(
-    FileStorageInterceptor('file', {
-      storageType: FileStorageEnum.LOCAL,
-    })
-  )
-  uploadToLocal(@Body() body: any) {
-    return {
-      message: 'File uploaded to local storage',
-      fileKey: body.file,
-    };
+    return { message: 'Uploaded', fileKey: body.file };
   }
 }
 
 /**
- * Advanced: Custom logic for storage selection
+ * Programmatic selection in a service — resolve any registered driver by name.
  */
-import { Injectable } from '@nestjs/common';
-import { FileStorageService } from '@ackplus/nest-file-storage';
-
 @Injectable()
 export class SmartStorageService {
-  /**
-   * Select storage based on file size
-   */
-  async uploadFile(buffer: Buffer, fileName: string, fileSize: number) {
-    // Use local storage for small files (< 10MB)
-    // Use S3 for large files
-    const storageType = fileSize < 10 * 1024 * 1024 
-      ? FileStorageEnum.LOCAL 
-      : FileStorageEnum.S3;
+  constructor(private readonly fileStorage: FileStorageService) {}
 
-    const storage = await FileStorageService.getStorage(storageType);
-    return await storage.putFile(buffer, fileName);
+  /** Small files -> local, large files -> s3. */
+  async uploadBySize(buffer: Buffer, key: string) {
+    const driverName = buffer.length < 10 * 1024 * 1024 ? 'local' : 's3';
+    const driver = await this.fileStorage.getDriver(driverName);
+    return driver.putFile(buffer, key);
   }
 
-  /**
-   * Select storage based on file type
-   */
-  async uploadByType(buffer: Buffer, fileName: string, mimetype: string) {
-    let storageType: FileStorageEnum;
-
-    if (mimetype.startsWith('image/')) {
-      // Store images on S3 with CloudFront CDN
-      storageType = FileStorageEnum.S3;
-    } else if (mimetype.startsWith('video/')) {
-      // Store videos on Azure
-      storageType = FileStorageEnum.AZURE;
-    } else {
-      // Store other files locally
-      storageType = FileStorageEnum.LOCAL;
-    }
-
-    const storage = await FileStorageService.getStorage(storageType);
-    return await storage.putFile(buffer, fileName);
-  }
-
-  /**
-   * Select storage based on user plan
-   */
-  async uploadForUser(
-    buffer: Buffer, 
-    fileName: string, 
-    userPlan: 'free' | 'premium'
-  ) {
-    // Free users: local storage
-    // Premium users: S3 with better performance
-    const storageType = userPlan === 'premium' 
-      ? FileStorageEnum.S3 
-      : FileStorageEnum.LOCAL;
-
-    const storage = await FileStorageService.getStorage(storageType);
-    return await storage.putFile(buffer, fileName);
+  /** Route by content type. */
+  async uploadByType(buffer: Buffer, key: string, mimetype: string) {
+    const driverName = mimetype.startsWith('video/') ? 'azure' : 's3';
+    const driver = await this.fileStorage.getDriver(driverName);
+    return driver.putFile(buffer, key, { contentType: mimetype });
   }
 }
 
+// Tip: for per-tenant routing, prefer the module's `tenant` config (see example 12) — it caches
+// the resolved driver per tenant instead of selecting on every request.

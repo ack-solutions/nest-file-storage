@@ -1,53 +1,40 @@
 /**
  * Example 4: File Upload Controller
- * 
- * This example demonstrates different file upload scenarios using the FileStorageInterceptor.
+ *
+ * Different upload shapes with the FileStorageInterceptor, plus declarative validation.
  */
 
-import { Controller, Post, UseInterceptors, Body, BadRequestException } from '@nestjs/common';
+import { Controller, Post, UseInterceptors, Body } from '@nestjs/common';
 import { FileStorageInterceptor } from '@ackplus/nest-file-storage';
 
 @Controller('upload')
 export class UploadController {
   /**
-   * Single file upload
-   * POST /upload/single
-   * Form field: "file"
+   * Single file upload — POST /upload/single, form field "file".
    */
   @Post('single')
   @UseInterceptors(FileStorageInterceptor('file'))
   uploadSingle(@Body() body: any) {
-    return {
-      message: 'File uploaded successfully',
-      fileKey: body.file, // File key is automatically added to body
-    };
+    return { message: 'File uploaded successfully', fileKey: body.file };
   }
 
   /**
-   * Multiple files upload (same field name)
-   * POST /upload/multiple
-   * Form field: "files" (multiple files)
+   * Multiple files in one field — POST /upload/multiple, form field "files".
    */
   @Post('multiple')
   @UseInterceptors(
-    FileStorageInterceptor({
-      type: 'array',
-      fieldName: 'files',
-      maxCount: 10, // Maximum 10 files
-    })
+    FileStorageInterceptor({ type: 'array', fieldName: 'files', maxCount: 10 })
   )
   uploadMultiple(@Body() body: any) {
     return {
       message: 'Files uploaded successfully',
-      fileKeys: body.files, // Array of file keys
+      fileKeys: body.files, // string[]
       count: body.files.length,
     };
   }
 
   /**
-   * Multiple fields with different files
-   * POST /upload/fields
-   * Form fields: "avatar" (1 file), "photos" (up to 5 files)
+   * Multiple named fields — POST /upload/fields, fields "avatar" and "photos".
    */
   @Post('fields')
   @UseInterceptors(
@@ -62,56 +49,34 @@ export class UploadController {
   uploadFields(@Body() body: any) {
     return {
       message: 'Files uploaded successfully',
-      avatar: body.avatar, // Single file key
-      photos: body.photos, // Array of file keys
+      avatar: body.avatar, // string[] (always an array in 'fields' mode)
+      photos: body.photos, // string[]
     };
   }
 
   /**
-   * Upload with custom file information
-   * Returns full file object instead of just the key
+   * Return the full file object instead of just the key.
    */
   @Post('with-details')
-  @UseInterceptors(
-    FileStorageInterceptor('file', {
-      mapToRequestBody: (file) => {
-        // Return the full file object
-        return file;
-      },
-    })
-  )
+  @UseInterceptors(FileStorageInterceptor('file', { mapToRequestBody: (file) => file }))
   uploadWithDetails(@Body() body: any) {
-    return {
-      message: 'File uploaded successfully',
-      file: body.file, // Full file object with key, url, size, etc.
-    };
+    return { message: 'File uploaded successfully', file: body.file };
   }
 
   /**
-   * Upload with validation
+   * Declarative validation (v2) — type + size checks become typed 400s.
    */
   @Post('image')
   @UseInterceptors(
     FileStorageInterceptor('image', {
-      fileName: (file) => {
-        // Validate file type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!allowedTypes.includes(file.mimetype)) {
-          throw new BadRequestException('Only image files are allowed');
-        }
-
-        // Generate filename with timestamp
-        const timestamp = Date.now();
-        const ext = file.originalname.split('.').pop();
-        return `image-${timestamp}.${ext}`;
+      validation: {
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        maxSize: 5 * 1024 * 1024, // 5 MB
       },
+      fileName: (file) => `image-${Date.now()}.${file.originalname.split('.').pop()}`,
     })
   )
   uploadImage(@Body() body: any) {
-    return {
-      message: 'Image uploaded successfully',
-      imageKey: body.image,
-    };
+    return { message: 'Image uploaded successfully', imageKey: body.image };
   }
 }
-

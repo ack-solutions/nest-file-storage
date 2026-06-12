@@ -1,122 +1,40 @@
 # Examples
 
-This directory contains comprehensive examples demonstrating various features and use cases of `@ackplus/nest-file-storage`.
+Runnable-style snippets for `@ackplus/nest-file-storage` (v2). Copy what you need into your app.
 
-## 📚 Available Examples
+> New to the library? Start with the [docs](https://ack-solutions.github.io/nest-file-storage/) or the package [README](../README.md). Upgrading from v1? See [MIGRATION.md](../MIGRATION.md).
 
-### Getting Started
+## Configuration
 
-1. **[Basic Local Storage](./1-basic-local-storage.example.ts)**
-   - Setting up local file storage
-   - Basic configuration
-   - Perfect for development
+1. **[Basic local storage](./1-basic-local-storage.example.ts)** — one `localDriver`, made the default.
+2. **[AWS S3](./2-s3-storage.example.ts)** — `s3Driver` via `forRootAsync` + `ConfigService`.
+3. **[Azure Blob](./3-azure-storage.example.ts)** — `azureDriver` via `forRootAsync` + `ConfigService`.
+5. **[Custom key generation](./5-custom-configuration.example.ts)** — default `fileName` / `fileDist` on the driver.
 
-2. **[AWS S3 Storage](./2-s3-storage.example.ts)**
-   - Configure AWS S3
-   - Async configuration with ConfigService
-   - Environment variables setup
+## Uploading
 
-3. **[Azure Blob Storage](./3-azure-storage.example.ts)**
-   - Configure Azure Blob Storage
-   - Connection string setup
-   - Container management
+4. **[Upload controller](./4-upload-controller.example.ts)** — single / array / fields, and declarative validation.
+7. **[User avatar](./7-user-avatar.example.ts)** — validation, old-file cleanup, DB update.
+8. **[Document management](./8-document-management.example.ts)** — upload, download, copy, delete.
 
-### Core Features
+## Programmatic & advanced
 
-4. **[File Upload Controller](./4-upload-controller.example.ts)**
-   - Single file upload
-   - Multiple files upload
-   - Multiple fields upload
-   - File validation
-   - Custom file mapping
+6. **[File service](./6-file-service.example.ts)** — the injectable `FileStorageService`.
+9. **[Dynamic storage](./9-dynamic-storage.example.ts)** — pick a driver per route/request by name.
+11. **[Custom driver](./11-custom-driver.example.ts)** — implement `StorageDriver` + `defineDriver`.
+12. **[Multi-tenant](./12-multi-tenant.example.ts)** — route storage per tenant (shared + prefix or dedicated).
 
-5. **[Custom Configuration](./5-custom-configuration.example.ts)**
-   - Custom file naming
-   - Custom directory structure
-   - File transformations
-   - Organized file storage
+## Testing
 
-6. **[File Service](./6-file-service.example.ts)**
-   - File operations (get, delete, copy)
-   - Upload from local filesystem
-   - Get public URLs
-   - Generate signed URLs (S3)
-   - Batch operations
-
-### Real-World Use Cases
-
-7. **[User Avatar Upload](./7-user-avatar.example.ts)**
-   - Complete avatar upload feature
-   - File validation
-   - Old file cleanup
-   - Database integration
-
-8. **[Document Management System](./8-document-management.example.ts)**
-   - Upload/download documents
-   - Document listing
-   - File copying
-   - Signed URLs for secure access
-
-9. **[Dynamic Storage Selection](./9-dynamic-storage.example.ts)**
-   - Switch storage per request
-   - Storage selection by file size
-   - Storage selection by file type
-   - Storage selection by user plan
-
-10. **[Testing](./10-testing.example.ts)**
-    - E2E testing examples
-    - Unit testing
-    - Mock storage implementation
-    - Test setup and cleanup
-
-## 🚀 How to Use These Examples
-
-### 1. Copy Example Code
-
-Simply copy the relevant example code to your project:
-
-```bash
-# Copy specific example
-cp examples/1-basic-local-storage.example.ts src/config/storage.config.ts
-```
-
-### 2. Modify for Your Needs
-
-Each example is well-documented with comments explaining:
-- What the code does
-- Configuration options
-- Environment variables needed
-- Expected behavior
-
-### 3. Run Your Application
-
-```bash
-npm run start:dev
-```
-
-## 💡 Tips
-
-- **Start Simple**: Begin with Example 1 (Local Storage) for development
-- **Environment Variables**: Use Example 2 or 3 for production with proper secrets management
-- **Validation**: See Example 4 for file type and size validation
-- **Custom Logic**: Examples 5-9 show advanced customization options
-- **Testing**: Example 10 provides complete testing setup
-
-## 📖 More Resources
-
-- **[Main Documentation](../README.md)** - Complete feature guide
-- **[GitHub Issues](https://github.com/ack-solutions/nest-file-storage/issues)** - Report issues or request features
-- **[NPM Package](https://www.npmjs.com/package/@ackplus/nest-file-storage)** - Published package
-
-## 🤝 Contributing
-
-Found a bug in an example? Want to add a new example? PRs are welcome!
-
-1. Add your example file: `[number]-[name].example.ts`
-2. Add it to this README
-3. Submit a PR
+10. **[Testing](./10-testing.example.ts)** — a local driver against a temp dir, and an in-memory mock driver.
 
 ---
 
-**Need help?** Open an issue on [GitHub](https://github.com/ack-solutions/nest-file-storage/issues)
+**Key v2 changes you'll see in these examples**
 
+- Config is `{ default, drivers: { name: someDriver(...) } }` — not `{ storage, localConfig }`.
+- The service is **injected** (`constructor(private fileStorage: FileStorageService)`), not static.
+- Validation is **declarative** (`validation: { maxSize, allowedMimeTypes, ... }`), not thrown inside `fileName`.
+- Custom storage is a first-class `StorageDriver` registered with `defineDriver` — and works everywhere.
+
+Found an issue or want a new example? PRs welcome — open one on [GitHub](https://github.com/ack-solutions/nest-file-storage).

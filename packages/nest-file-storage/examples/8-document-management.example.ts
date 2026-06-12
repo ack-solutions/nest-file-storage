@@ -1,26 +1,13 @@
 /**
  * Example 8: Document Management System
- * 
- * This example demonstrates a complete document management system with
- * upload, download, listing, and deletion features.
+ *
+ * Upload, download, list, copy, and delete documents — using the injected service.
  */
 
-import { 
-  Controller, 
-  Get, 
-  Post, 
-  Delete,
-  Param,
-  UseInterceptors,
-  Body,
-  Res,
-  NotFoundException,
-  StreamableFile,
-} from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, UseInterceptors, Body, Res, NotFoundException, StreamableFile } from '@nestjs/common';
 import { Response } from 'express';
 import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
 
-// Document entity interface
 interface Document {
   id: number;
   name: string;
@@ -31,235 +18,97 @@ interface Document {
   uploadedAt: Date;
 }
 
-// Document service (example)
 class DocumentService {
-  async create(data: Partial<Document>): Promise<Document> {
-    // Save to database
-    return {} as Document;
-  }
-
-  async findAll(): Promise<Document[]> {
-    // Get all documents from database
-    return [] as Document[];
-  }
-
-  async findById(id: number): Promise<Document> {
-    // Get document from database
-    return {} as Document;
-  }
-
-  async delete(id: number): Promise<void> {
-    // Delete from database
-  }
+  async create(_data: Partial<Document>): Promise<Document> { return {} as Document; }
+  async findAll(): Promise<Document[]> { return []; }
+  async findById(_id: number): Promise<Document> { return {} as Document; }
+  async delete(_id: number): Promise<void> {}
 }
 
 @Controller('documents')
 export class DocumentController {
-  constructor(private readonly documentService: DocumentService) {}
+  constructor(
+    private readonly documentService: DocumentService,
+    private readonly fileStorage: FileStorageService,
+  ) {}
 
-  /**
-   * Upload single document
-   */
   @Post('upload')
   @UseInterceptors(
-    FileStorageInterceptor('document', {
-      fileDist: () => 'documents',
-      mapToRequestBody: (file) => file, // Return full file object
-    })
+    FileStorageInterceptor('document', { fileDist: () => 'documents', mapToRequestBody: (file) => file })
   )
   async uploadDocument(@Body() body: any) {
-    const uploadedFile = body.document;
-
-    // Save document info to database
+    const file = body.document;
     const document = await this.documentService.create({
-      name: uploadedFile.originalName,
-      key: uploadedFile.key,
-      url: uploadedFile.url,
-      size: uploadedFile.size,
-      mimetype: uploadedFile.mimetype,
-      uploadedAt: new Date(),
+      name: file.originalName, key: file.key, url: file.url,
+      size: file.size, mimetype: file.mimetype, uploadedAt: new Date(),
     });
-
-    return {
-      message: 'Document uploaded successfully',
-      document,
-    };
+    return { message: 'Document uploaded successfully', document };
   }
 
-  /**
-   * Upload multiple documents
-   */
   @Post('upload/multiple')
   @UseInterceptors(
-    FileStorageInterceptor({
-      type: 'array',
-      fieldName: 'documents',
-      maxCount: 10,
-    }, {
-      fileDist: () => 'documents',
-      mapToRequestBody: (files) => files,
-    })
+    FileStorageInterceptor(
+      { type: 'array', fieldName: 'documents', maxCount: 10 },
+      { fileDist: () => 'documents', mapToRequestBody: (files) => files }
+    )
   )
-  async uploadMultipleDocuments(@Body() body: any) {
-    const uploadedFiles = body.documents;
-
-    // Save all documents to database
+  async uploadMany(@Body() body: any) {
     const documents = await Promise.all(
-      uploadedFiles.map(file =>
+      body.documents.map((file: any) =>
         this.documentService.create({
-          name: file.originalName,
-          key: file.key,
-          url: file.url,
-          size: file.size,
-          mimetype: file.mimetype,
-          uploadedAt: new Date(),
+          name: file.originalName, key: file.key, url: file.url,
+          size: file.size, mimetype: file.mimetype, uploadedAt: new Date(),
         })
       )
     );
-
-    return {
-      message: `${documents.length} documents uploaded successfully`,
-      documents,
-    };
+    return { message: `${documents.length} documents uploaded successfully`, documents };
   }
 
-  /**
-   * Get all documents
-   */
   @Get()
-  async getAllDocuments() {
-    const documents = await this.documentService.findAll();
-    return { documents };
+  async getAll() {
+    return { documents: await this.documentService.findAll() };
   }
 
-  /**
-   * Download document
-   */
   @Get(':id/download')
-  async downloadDocument(
-    @Param('id') id: number,
-    @Res({ passthrough: true }) res: Response,
-  ): Promise<StreamableFile> {
-    // Get document from database
+  async download(@Param('id') id: number, @Res({ passthrough: true }) res: Response): Promise<StreamableFile> {
     const document = await this.documentService.findById(id);
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
+    if (!document) throw new NotFoundException('Document not found');
 
-    // Get file from storage
-    const storage = await FileStorageService.getStorage();
-    const fileBuffer = await storage.getFile(document.key);
-
-    // Set response headers
+    const buffer = await this.fileStorage.getFile(document.key);
     res.set({
       'Content-Type': document.mimetype || 'application/octet-stream',
       'Content-Disposition': `attachment; filename="${document.name}"`,
-      'Content-Length': document.size,
     });
-
-    return new StreamableFile(fileBuffer);
+    return new StreamableFile(buffer);
   }
 
-  /**
-   * Get document URL (for preview or direct access)
-   */
-  @Get(':id/url')
-  async getDocumentUrl(@Param('id') id: number) {
-    const document = await this.documentService.findById(id);
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
-
-    return {
-      url: document.url,
-      expiresIn: null, // Permanent URL
-    };
-  }
-
-  /**
-   * Get signed URL (for S3, temporary access)
-   */
   @Get(':id/signed-url')
-  async getSignedUrl(@Param('id') id: number) {
+  async signedUrl(@Param('id') id: number) {
     const document = await this.documentService.findById(id);
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
-
-    const storage = await FileStorageService.getStorage();
-    
-    let url: string;
-    if ('getSignedUrl' in storage) {
-      // Generate signed URL (valid for 1 hour)
-      url = await storage.getSignedUrl(document.key, { expiresIn: 3600 });
-    } else {
-      // Fallback to regular URL
-      url = storage.getUrl(document.key);
-    }
-
-    return {
-      url,
-      expiresIn: 3600, // seconds
-    };
+    if (!document) throw new NotFoundException('Document not found');
+    return { url: await this.fileStorage.getSignedUrl(document.key, { expiresIn: 3600 }), expiresIn: 3600 };
   }
 
-  /**
-   * Delete document
-   */
   @Delete(':id')
-  async deleteDocument(@Param('id') id: number) {
+  async remove(@Param('id') id: number) {
     const document = await this.documentService.findById(id);
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
-
-    // Delete from storage
-    const storage = await FileStorageService.getStorage();
-    await storage.deleteFile(document.key);
-
-    // Delete from database
+    if (!document) throw new NotFoundException('Document not found');
+    await this.fileStorage.deleteFile(document.key);
     await this.documentService.delete(id);
-
-    return {
-      message: 'Document deleted successfully',
-    };
+    return { message: 'Document deleted successfully' };
   }
 
-  /**
-   * Copy document
-   */
   @Post(':id/copy')
-  async copyDocument(@Param('id') id: number) {
+  async copy(@Param('id') id: number) {
     const document = await this.documentService.findById(id);
-    if (!document) {
-      throw new NotFoundException('Document not found');
-    }
+    if (!document) throw new NotFoundException('Document not found');
 
-    // Generate new key for the copy
-    const timestamp = Date.now();
-    const newKey = document.key.replace(
-      /(\.[^.]+)$/,
-      `-copy-${timestamp}$1`
-    );
-
-    // Copy file in storage
-    const storage = await FileStorageService.getStorage();
-    const copiedFile = await storage.copyFile(document.key, newKey);
-
-    // Save copy to database
+    const newKey = document.key.replace(/(\.[^.]+)$/, `-copy-${Date.now()}$1`);
+    const copied = await this.fileStorage.copyFile(document.key, newKey);
     const copiedDocument = await this.documentService.create({
-      name: `${document.name} (Copy)`,
-      key: copiedFile.key,
-      url: copiedFile.url,
-      size: copiedFile.size,
-      mimetype: document.mimetype,
-      uploadedAt: new Date(),
+      name: `${document.name} (Copy)`, key: copied.key, url: copied.url,
+      size: copied.size, mimetype: document.mimetype, uploadedAt: new Date(),
     });
-
-    return {
-      message: 'Document copied successfully',
-      document: copiedDocument,
-    };
+    return { message: 'Document copied successfully', document: copiedDocument };
   }
 }
-

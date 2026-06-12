@@ -1,8 +1,7 @@
 /**
  * Example 6: File Service
- * 
- * This example demonstrates how to use FileStorageService to perform
- * file operations programmatically.
+ *
+ * Use the injectable FileStorageService to work with files programmatically.
  */
 
 import { Injectable, NotFoundException } from '@nestjs/common';
@@ -11,114 +10,58 @@ import * as fs from 'fs';
 
 @Injectable()
 export class FileService {
-  /**
-   * Get file content as Buffer
-   */
+  // v2: inject the service (no more static FileStorageService.getStorage()).
+  constructor(private readonly fileStorage: FileStorageService) {}
+
+  /** Read file content as a Buffer. */
   async getFile(key: string): Promise<Buffer> {
     try {
-      const storage = await FileStorageService.getStorage();
-      return await storage.getFile(key);
-    } catch (error) {
+      return await this.fileStorage.getFile(key);
+    } catch {
       throw new NotFoundException(`File not found: ${key}`);
     }
   }
 
-  /**
-   * Delete a file
-   */
-  async deleteFile(key: string): Promise<void> {
-    const storage = await FileStorageService.getStorage();
-    await storage.deleteFile(key);
+  /** Delete a file. */
+  deleteFile(key: string): Promise<void> {
+    return this.fileStorage.deleteFile(key);
   }
 
-  /**
-   * Copy a file to a new location
-   */
-  async copyFile(oldKey: string, newKey: string) {
-    const storage = await FileStorageService.getStorage();
-    return await storage.copyFile(oldKey, newKey);
+  /** Copy a file to a new key. */
+  copyFile(oldKey: string, newKey: string) {
+    return this.fileStorage.copyFile(oldKey, newKey);
   }
 
-  /**
-   * Upload a file from local filesystem
-   */
+  /** Upload a file from the local filesystem. */
   async uploadFromLocal(localPath: string, storageKey: string) {
-    const fileBuffer = await fs.promises.readFile(localPath);
-    const storage = await FileStorageService.getStorage();
-    return await storage.putFile(fileBuffer, storageKey);
+    const buffer = await fs.promises.readFile(localPath);
+    return this.fileStorage.putFile(buffer, storageKey);
   }
 
-  /**
-   * Get public URL for a file
-   */
-  async getFileUrl(key: string): Promise<string> {
-    const storage = await FileStorageService.getStorage();
-    return storage.getUrl(key);
+  /** Public URL for a key. */
+  getFileUrl(key: string): Promise<string> {
+    return this.fileStorage.getUrl(key);
   }
 
-  /**
-   * Get signed URL (for S3)
-   * Useful for temporary access to private files
-   */
-  async getSignedUrl(key: string, expiresIn: number = 3600): Promise<string> {
-    const storage = await FileStorageService.getStorage();
-    
-    // Check if storage supports signed URLs (S3)
-    if ('getSignedUrl' in storage) {
-      return await storage.getSignedUrl(key, { expiresIn });
-    }
-    
-    // Fallback to regular URL for other storage types
-    return storage.getUrl(key);
+  /** Time-limited signed URL (S3/Azure); falls back to the public URL otherwise. */
+  getSignedUrl(key: string, expiresIn = 3600): Promise<string> {
+    return this.fileStorage.getSignedUrl(key, { expiresIn });
   }
 
-  /**
-   * Upload file from Buffer
-   */
-  async uploadBuffer(buffer: Buffer, key: string, mimetype?: string) {
-    const storage = await FileStorageService.getStorage();
-    const result = await storage.putFile(buffer, key);
-    
-    return {
-      key: result.key,
-      url: result.url,
-      size: result.size,
-      mimetype,
-    };
+  /** Upload from a Buffer. */
+  async uploadBuffer(buffer: Buffer, key: string, contentType?: string) {
+    const result = await this.fileStorage.putFile(buffer, key, { contentType });
+    return { key: result.key, url: result.url, size: result.size };
   }
 
-  /**
-   * Check if file exists
-   */
-  async fileExists(key: string): Promise<boolean> {
-    try {
-      const storage = await FileStorageService.getStorage();
-      await storage.getFile(key);
-      return true;
-    } catch (error) {
-      return false;
-    }
+  /** Resolve a specific (non-default) driver by name. */
+  async uploadToS3(buffer: Buffer, key: string) {
+    const s3 = await this.fileStorage.getDriver('s3');
+    return s3.putFile(buffer, key);
   }
 
-  /**
-   * Delete multiple files
-   */
-  async deleteMultipleFiles(keys: string[]): Promise<void> {
-    const storage = await FileStorageService.getStorage();
-    await Promise.all(keys.map(key => storage.deleteFile(key)));
-  }
-
-  /**
-   * Get file path (Local storage only)
-   */
-  async getFilePath(key: string): Promise<string | undefined> {
-    const storage = await FileStorageService.getStorage();
-    
-    if ('path' in storage) {
-      return storage.path(key);
-    }
-    
-    return undefined;
+  /** Delete several files. */
+  deleteMany(keys: string[]): Promise<void[]> {
+    return Promise.all(keys.map((key) => this.fileStorage.deleteFile(key)));
   }
 }
-

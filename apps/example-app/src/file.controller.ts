@@ -6,7 +6,6 @@ import {
   Param,
   Body,
   UseInterceptors,
-  BadRequestException,
   NotFoundException,
   StreamableFile,
   Res,
@@ -15,9 +14,17 @@ import { ApiTags, ApiOperation, ApiConsumes, ApiBody, ApiResponse } from '@nestj
 import type { Response } from 'express';
 import { FileStorageInterceptor, FileStorageService } from '@ackplus/nest-file-storage';
 
+/** Express 5 named wildcard (`*path`) yields the segments as an array — rejoin into a storage key. */
+function pathKey(value: string | string[]): string {
+  return Array.isArray(value) ? value.join('/') : value;
+}
+
 @ApiTags('files')
 @Controller('files')
 export class FileController {
+  // v2: inject the service (the static FileStorageService.getStorage() still works but is deprecated).
+  constructor(private readonly fileStorage: FileStorageService) {}
+
   /**
    * Upload a single file
    */
@@ -29,11 +36,7 @@ export class FileController {
     schema: {
       type: 'object',
       properties: {
-        file: {
-          type: 'string',
-          format: 'binary',
-          description: 'File to upload',
-        },
+        file: { type: 'string', format: 'binary', description: 'File to upload' },
       },
     },
   })
@@ -41,7 +44,7 @@ export class FileController {
   @ApiResponse({ status: 400, description: 'Bad request' })
   @UseInterceptors(
     FileStorageInterceptor('file', {
-      mapToRequestBody: (file) => file, // Return full file object
+      mapToRequestBody: (file) => file, // Return the full file object
     })
   )
   uploadSingleFile(@Body() body: any) {
@@ -64,10 +67,7 @@ export class FileController {
       properties: {
         files: {
           type: 'array',
-          items: {
-            type: 'string',
-            format: 'binary',
-          },
+          items: { type: 'string', format: 'binary' },
           description: 'Files to upload (max 10)',
         },
       },
@@ -76,14 +76,8 @@ export class FileController {
   @ApiResponse({ status: 201, description: 'Files uploaded successfully' })
   @UseInterceptors(
     FileStorageInterceptor(
-      {
-        type: 'array',
-        fieldName: 'files',
-        maxCount: 10,
-      },
-      {
-        mapToRequestBody: (files) => files,
-      }
+      { type: 'array', fieldName: 'files', maxCount: 10 },
+      { mapToRequestBody: (files) => files }
     )
   )
   uploadMultipleFiles(@Body() body: any) {
@@ -95,21 +89,17 @@ export class FileController {
   }
 
   /**
-   * Upload image with validation
+   * Upload image with declarative validation (v2: no more validating inside fileName).
    */
   @Post('upload-image')
-  @ApiOperation({ summary: 'Upload an image (JPEG, PNG, GIF, WebP only)' })
+  @ApiOperation({ summary: 'Upload an image (JPEG, PNG, GIF, WebP only, max 5MB)' })
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     description: 'Image file to upload',
     schema: {
       type: 'object',
       properties: {
-        image: {
-          type: 'string',
-          format: 'binary',
-          description: 'Image file (JPEG, PNG, GIF, WebP)',
-        },
+        image: { type: 'string', format: 'binary', description: 'Image file (JPEG, PNG, GIF, WebP)' },
       },
     },
   })
@@ -117,27 +107,12 @@ export class FileController {
   @ApiResponse({ status: 400, description: 'Invalid file type or size' })
   @UseInterceptors(
     FileStorageInterceptor('image', {
-      fileName: (file) => {
-        // Validate image type
-        const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-        if (!allowedTypes.includes(file.mimetype)) {
-          throw new BadRequestException(
-            'Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed.'
-          );
-        }
-
-        // Validate file size (5MB max)
-        const maxSize = 5 * 1024 * 1024; // 5MB
-        if (file.size > maxSize) {
-          throw new BadRequestException('File size must be less than 5MB');
-        }
-
-        // Generate unique filename
-        const timestamp = Date.now();
-        const ext = file.originalname.split('.').pop();
-        return `image-${timestamp}.${ext}`;
+      validation: {
+        allowedMimeTypes: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
+        maxSize: 5 * 1024 * 1024, // 5MB
       },
       fileDist: () => 'images',
+      fileName: (file) => `image-${Date.now()}.${file.originalname.split('.').pop()}`,
       mapToRequestBody: (file) => file,
     })
   )
@@ -159,22 +134,15 @@ export class FileController {
     schema: {
       type: 'object',
       properties: {
-        document: {
-          type: 'string',
-          format: 'binary',
-          description: 'Document file',
-        },
+        document: { type: 'string', format: 'binary', description: 'Document file' },
       },
     },
   })
   @ApiResponse({ status: 201, description: 'Document uploaded successfully' })
   @UseInterceptors(
     FileStorageInterceptor('document', {
-      fileName: (file) => {
-        const timestamp = Date.now();
-        return `doc-${timestamp}-${file.originalname}`;
-      },
       fileDist: () => 'documents',
+      fileName: (file) => `doc-${Date.now()}-${file.originalname}`,
       mapToRequestBody: (file) => file,
     })
   )
@@ -193,14 +161,12 @@ export class FileController {
   @ApiResponse({ status: 200, description: 'File downloaded successfully' })
   @ApiResponse({ status: 404, description: 'File not found' })
   async downloadFile(
-    @Param('path') key: string,
+    @Param('path') path: string | string[],
     @Res({ passthrough: true }) res: Response
   ): Promise<StreamableFile> {
+    const key = pathKey(path);
     try {
-      const storage = await FileStorageService.getStorage();
-      const fileBuffer = await storage.getFile(key);
-
-      // Extract filename from key
+      const fileBuffer = await this.fileStorage.getFile(key);
       const filename = key.split('/').pop() || 'download';
 
       res.set({
@@ -209,7 +175,7 @@ export class FileController {
       });
 
       return new StreamableFile(fileBuffer);
-    } catch (error) {
+    } catch {
       throw new NotFoundException(`File not found: ${key}`);
     }
   }
@@ -220,36 +186,26 @@ export class FileController {
   @Get('url/*path')
   @ApiOperation({ summary: 'Get public URL for a file' })
   @ApiResponse({ status: 200, description: 'URL retrieved successfully' })
-  async getFileUrl(@Param('path') key: string) {
-    const storage = await FileStorageService.getStorage();
-    const url = storage.getUrl(key);
-
+  async getFileUrl(@Param('path') path: string | string[]) {
+    const key = pathKey(path);
     return {
       key,
-      url,
+      url: await this.fileStorage.getUrl(key),
     };
   }
 
   /**
-   * Get signed URL (for S3)
+   * Get signed URL (S3/Azure; falls back to the public URL for local)
    */
   @Get('signed-url/*path')
-  @ApiOperation({ summary: 'Get signed URL for temporary access (S3 only)' })
+  @ApiOperation({ summary: 'Get signed URL for temporary access (S3/Azure)' })
   @ApiResponse({ status: 200, description: 'Signed URL generated successfully' })
-  async getSignedUrl(@Param('path') key: string) {
-    const storage = await FileStorageService.getStorage();
-
-    let url: string;
-    if ('getSignedUrl' in storage && storage.getSignedUrl) {
-      url = await storage.getSignedUrl(key, { expiresIn: 3600 });
-    } else {
-      url = await Promise.resolve(storage.getUrl(key));
-    }
-
+  async getSignedUrl(@Param('path') path: string | string[]) {
+    const key = pathKey(path);
     return {
       key,
-      url,
-      expiresIn: 3600, // seconds
+      url: await this.fileStorage.getSignedUrl(key, { expiresIn: 3600 }),
+      expiresIn: 3600,
     };
   }
 
@@ -260,16 +216,12 @@ export class FileController {
   @ApiOperation({ summary: 'Delete a file by key' })
   @ApiResponse({ status: 200, description: 'File deleted successfully' })
   @ApiResponse({ status: 404, description: 'File not found' })
-  async deleteFile(@Param('path') key: string) {
+  async deleteFile(@Param('path') path: string | string[]) {
+    const key = pathKey(path);
     try {
-      const storage = await FileStorageService.getStorage();
-      await storage.deleteFile(key);
-
-      return {
-        message: 'File deleted successfully',
-        key,
-      };
-    } catch (error) {
+      await this.fileStorage.deleteFile(key);
+      return { message: 'File deleted successfully', key };
+    } catch {
       throw new NotFoundException(`File not found: ${key}`);
     }
   }
@@ -283,16 +235,8 @@ export class FileController {
     schema: {
       type: 'object',
       properties: {
-        sourceKey: {
-          type: 'string',
-          description: 'Source file key',
-          example: 'images/image-123456.jpg',
-        },
-        targetKey: {
-          type: 'string',
-          description: 'Target file key',
-          example: 'images/image-123456-copy.jpg',
-        },
+        sourceKey: { type: 'string', description: 'Source file key', example: 'images/image-123456.jpg' },
+        targetKey: { type: 'string', description: 'Target file key', example: 'images/image-123456-copy.jpg' },
       },
       required: ['sourceKey', 'targetKey'],
     },
@@ -301,18 +245,15 @@ export class FileController {
   @ApiResponse({ status: 404, description: 'Source file not found' })
   async copyFile(@Body() body: { sourceKey: string; targetKey: string }) {
     try {
-      const storage = await FileStorageService.getStorage();
-      const result = await storage.copyFile(body.sourceKey, body.targetKey);
-
+      const result = await this.fileStorage.copyFile(body.sourceKey, body.targetKey);
       return {
         message: 'File copied successfully',
         source: body.sourceKey,
         target: body.targetKey,
         file: result,
       };
-    } catch (error) {
+    } catch {
       throw new NotFoundException(`Source file not found: ${body.sourceKey}`);
     }
   }
 }
-

@@ -1,190 +1,107 @@
-import { NestInterceptor, ExecutionContext, CallHandler } from '@nestjs/common';
+import { BadRequestException, CallHandler, ExecutionContext, NestInterceptor } from '@nestjs/common';
 import { Request, RequestHandler, Response } from 'express';
-import multer from 'multer';
+import multer, { MulterError } from 'multer';
 
-import { FileStorageService } from '../file-storage.service';
-import { StorageFactory } from '../storage.factory';
-import { FileStorageEnum, StorageOptions, FileStorageConfigOptions, UploadedFile, LocalStorageOptions, S3StorageOptions, AzureStorageOptions } from '../types';
+import type { UploadedFile } from '../drivers/driver.interface';
+import { DriverMulterEngine, joinKey } from '../multer/driver-multer-engine';
+import { FileStorageRegistryHolder } from '../registry-holder';
+import { buildFileFilter, FileTooLargeException, mergeValidation, toMulterLimits, TooManyFilesException, UploadValidation } from '../validation';
 
-/** Multer file after our storage engine has added key, url, fullPath */
+/** Multer file after our storage engine has attached key/url/fullPath. */
 export type MulterFileWithStorageMeta = Express.Multer.File & Partial<Pick<UploadedFile, 'key' | 'url' | 'fullPath'>>;
 
 /**
- * Configures which form field(s) the interceptor accepts. Pass as first argument to
- * `FileStorageInterceptor`, or as a string for single-file (e.g. `'file'` → `{ type: 'single', fieldName: 'file' }`).
+ * Configures which form field(s) the interceptor accepts. Pass as the first argument to
+ * `FileStorageInterceptor`, or a plain string for single-file (e.g. `'file'`).
  */
 export type FileUploadConfig = {
-    /** `'single'` = one file, `'array'` = multiple files (same field), `'fields'` = multiple named fields */
+    /** `'single'` = one file, `'array'` = multiple files (same field), `'fields'` = multiple named fields. */
     type: 'single' | 'array' | 'fields';
     /** Form field name (required for single and array). */
     fieldName?: string;
     /** Max number of files for array uploads. Default 10. */
     maxCount?: number;
-    /** For type `'fields'`: list of field names and optional maxCount per field. */
+    /** For `'fields'`: the named fields and optional per-field maxCount. */
     fields?: { name: string; maxCount?: number }[];
 };
 
 /**
- * Options for the file storage interceptor. Pass as the second argument to
- * `FileStorageInterceptor(fieldConfig, interceptorOptions)`.
+ * Per-route options for the interceptor.
  *
  * @example
- * // Use default storage from module config, single file as 'file'
- * FileStorageInterceptor('file')
- *
- * @example
- * // Override storage to S3 for this route, custom path and body mapping
+ * // Default driver, validate size + type
  * FileStorageInterceptor('avatar', {
- *   storageType: FileStorageEnum.S3,
- *   storageOptions: { bucket: 'my-bucket', ... },
- *   fileDist: () => 'users/avatars',
- *   mapToRequestBody: (f) => ({ key: f.key, url: f.url })
+ *   validation: { maxSize: 5 * 1024 * 1024, allowedMimeTypes: ['image/*'] },
+ *   fileDist: (_f, req) => `users/${req.user.id}`,
  * })
+ *
+ * @example
+ * // Force a specific registered driver for this route
+ * FileStorageInterceptor('file', { driver: 's3' })
  */
 export type FileStorageInterceptorOptions = {
     /**
-     * Custom file name in storage (key). Called per file before upload.
-     * Return the path/filename you want (e.g. with extension). Overrides module/storage config.
-     *
-     * @example
-     * fileName: (file, req) => `${req.user?.id}-${Date.now()}-${file.originalname}`
+     * Storage driver for this route. A registered driver name, or a function of the request
+     * (e.g. pick by user plan). Overrides tenant resolution and the module default.
      */
-    fileName?: (file: Express.Multer.File, req?: Request) => string;
+    driver?: string | ((req: Request) => string);
 
-    /**
-     * Custom directory/path prefix for this file in storage. Called per file before upload.
-     * Return the folder path (e.g. 'uploads/2024/01'). Overrides module/storage config.
-     *
-     * @example
-     * fileDist: (file, req) => `products/${req.body?.productId ?? 'draft'}`
-     */
-    fileDist?: (file: Express.Multer.File, req?: Request) => string;
+    /** Custom filename segment (the last path segment of the key). Overrides driver defaults. */
+    fileName?: (file: Express.Multer.File, req?: Request) => string | Promise<string>;
 
-    /**
-     * Optional prefix applied to the storage path (e.g. 'public/' or 'temp/').
-     * Merged with storage config. Useful to scope uploads per route.
-     */
+    /** Custom directory/path prefix (relative). Overrides driver defaults. */
+    fileDist?: (file: Express.Multer.File, req?: Request) => string | Promise<string>;
+
+    /** Static key prefix for this route. Combined with any tenant prefix. */
     prefix?: string;
 
-    /**
-     * Override the storage backend for this route. If not set, uses the module's default storage.
-     * Use with `storageOptions` when the module is configured for a different storage (e.g. LOCAL)
-     * but this route should use S3 or Azure.
-     *
-     * @example
-     * storageType: FileStorageEnum.S3
-     */
-    storageType?: FileStorageEnum;
+    /** Declarative validation for this route, merged over the module-level defaults. */
+    validation?: UploadValidation;
 
     /**
-     * Storage credentials/config for this route. Required when using `storageType` override
-     * with a different backend than the module default (e.g. S3 bucket, Azure container).
-     * Merged with module config when storage type matches.
-     *
-     * @example
-     * storageOptions: { bucket: 'uploads', region: 'us-east-1', ... }
-     */
-    storageOptions?: StorageOptions;
-
-    /**
-     * Define what is written to `request.body[fieldName]` after upload. Default: single file → `file.key`, array → `file[].key`.
-     * Return any value (string, object, array). Can be async.
-     *
-     * @example
-     * // Put only the URL in body
-     * mapToRequestBody: (file) => (Array.isArray(file) ? file.map(f => f.url) : file.url)
-     *
-     * @example
-     * // Put full metadata object
-     * mapToRequestBody: (file) => Array.isArray(file) ? file : { key: file.key, url: file.url, size: file.size }
+     * Define what is written to `request.body[fieldName]` after upload.
+     * Default: single → `file.key`, array → `file[].key`.
      */
     mapToRequestBody?: (file: UploadedFile | UploadedFile[], fieldName: string, req?: Request) => unknown | Promise<unknown>;
 
-    /**
-     * When `false`, do not overwrite `request.body[fieldName]` if it is already set (e.g. JSON body or PATCH update).
-     * Use when the client may send the same field name as JSON and you want to keep it unless no value was sent.
-     *
-     * @default true (always overwrite with uploaded file result)
-     *
-     * @example
-     * overwriteBodyField: false  // Keep existing body.files when already present
-     */
+    /** When `false`, don't overwrite `request.body[fieldName]` if it already has a value. Default `true`. */
     overwriteBodyField?: boolean;
 
-    /**
-     * Provide multer options per request: `limits` (e.g. fileSize) and/or `fileFilter`.
-     * Called before multer runs. Use for dynamic limits or MIME/extension checks.
-     *
-     * @example
-     * multerOptions: (req, fileConfig) => ({
-     *   limits: { fileSize: 5 * 1024 * 1024 },
-     *   fileFilter: (_, file, cb) => cb(null, /^image\//.test(file.mimetype))
-     * })
-     */
-    multerOptions?: (req: Request, fileConfig: FileUploadConfig) => {
-        limits?: multer.Options['limits'];
-        fileFilter?: multer.Options['fileFilter'];
-    };
-
-    /**
-     * Run validation or side effects after multer has parsed files and before the route handler.
-     * Use for cross-field checks (e.g. total file count), business rules, or throwing to reject the request.
-     * Can be async.
-     *
-     * @example
-     * afterUpload: (req, fileConfig) => {
-     *   const count = Array.isArray(req.files) ? req.files.length : 0;
-     *   if (count > 10) throw new BadRequestException('Max 10 files');
-     * }
-     */
+    /** Run after multer parses files and before the route handler (cross-field checks, side effects). */
     afterUpload?: (req: Request, fileConfig: FileUploadConfig) => void | Promise<void>;
+
+    /** Set to `false` to skip tenant resolution for this route (use the default driver instead). */
+    tenant?: false;
 };
 
-function getStorageConfig(storageType: FileStorageEnum, options: FileStorageConfigOptions): StorageOptions {
-    switch (storageType) {
-        case FileStorageEnum.LOCAL:
-            return (options as { localConfig: LocalStorageOptions }).localConfig as StorageOptions;
-        case FileStorageEnum.S3:
-            return (options as { s3Config: S3StorageOptions }).s3Config as StorageOptions;
-        case FileStorageEnum.AZURE:
-            return (options as { azureConfig: AzureStorageOptions }).azureConfig as StorageOptions;
-    }
-}
-
-/**
- * Maps Multer file to UploadedFile. Accepts Express.Multer.File so call sites
- * (request.file, request.files) type-check without casts. Storage engines add
- * key/url/fullPath at runtime; we read them optionally.
- */
+/** Map a parsed Multer file (with our engine's metadata) to the canonical UploadedFile shape. */
 function mapFileObject(file: Express.Multer.File): UploadedFile {
-    const withMeta = file as MulterFileWithStorageMeta & Partial<UploadedFile> & {
-        filename?: string;
-        originalName?: string;
-    };
-    const fileName = withMeta.filename ?? withMeta.fileName ?? file.originalname;
+    const withMeta = file as MulterFileWithStorageMeta &
+        Partial<UploadedFile> & { filename?: string; originalName?: string; path?: string };
+    const fileName = withMeta.fileName ?? withMeta.filename ?? file.originalname;
     const originalName = file.originalname ?? withMeta.originalName ?? fileName;
-    const fullPath = withMeta.fullPath ?? file.path ?? withMeta.key ?? '';
+    const fullPath = withMeta.fullPath ?? withMeta.path ?? withMeta.key ?? '';
 
     return {
-        fieldName: file.fieldname,
-        originalName,
-        fileName,
-        mimetype: file.mimetype,
-        size: file.size,
         key: withMeta.key ?? '',
         url: withMeta.url ?? '',
-        encoding: file.encoding,
+        originalName,
+        fileName,
+        size: file.size,
+        mimetype: file.mimetype,
+        fieldName: file.fieldname,
         fullPath,
-    } as UploadedFile;
+        encoding: file.encoding,
+    };
 }
 
 /**
- * Collect array files from request.files when using multer.fields() for bracket notation.
- * Supports both request.files['productImages'] and request.files['productImages[0]'], etc.
+ * Collect array files from request.files when multer.fields() is used for bracket notation.
+ * Supports both `files` (repeated) and `files[0]`, `files[1]`, ...
  */
 function collectArrayFiles(
     files: { [fieldname: string]: Express.Multer.File[] },
-    fieldName: string
+    fieldName: string,
 ): Express.Multer.File[] {
     const direct = files[fieldName];
     if (direct && direct.length > 0) {
@@ -201,11 +118,7 @@ function collectArrayFiles(
     return collected;
 }
 
-function shouldSetBodyField(
-    request: Request,
-    fieldName: string,
-    overwriteBodyField: boolean
-): boolean {
+function shouldSetBodyField(request: Request, fieldName: string, overwriteBodyField: boolean): boolean {
     if (overwriteBodyField) return true;
     return request.body[fieldName] === undefined;
 }
@@ -213,25 +126,20 @@ function shouldSetBodyField(
 async function applyFileKeyMapping(
     request: Request,
     fileConfig: FileUploadConfig,
-    interceptorOptions?: FileStorageInterceptorOptions
+    interceptorOptions?: FileStorageInterceptorOptions,
 ): Promise<void> {
     const overwrite = interceptorOptions?.overwriteBodyField !== false;
     const mapCallback: (file: UploadedFile | UploadedFile[], fieldName: string, req?: Request) => unknown =
-        interceptorOptions?.mapToRequestBody ?? 
-        ((file: UploadedFile | UploadedFile[]) => {
-            if (Array.isArray(file)) {
-                return file.map((f) => f.key);
-            }
-            return file.key;
-        });
+        interceptorOptions?.mapToRequestBody ??
+        ((file: UploadedFile | UploadedFile[]) =>
+            Array.isArray(file) ? file.map((f) => f.key) : file.key);
 
     if (fileConfig.type === 'single') {
         const file = request.file;
         if (file) {
             const fieldName = fileConfig.fieldName || 'file';
             if (!shouldSetBodyField(request, fieldName, overwrite)) return;
-            const mappedFile = mapFileObject(file);
-            request.body[fieldName] = await mapCallback(mappedFile, fieldName, request);
+            request.body[fieldName] = await mapCallback(mapFileObject(file), fieldName, request);
         }
     } else if (fileConfig.type === 'array') {
         const fieldName = fileConfig.fieldName || 'files';
@@ -244,150 +152,124 @@ async function applyFileKeyMapping(
             files = [];
         }
         if (files.length > 0 && shouldSetBodyField(request, fieldName, overwrite)) {
-            const mappedFiles = files.map(f => mapFileObject(f));
-            request.body[fieldName] = await mapCallback(mappedFiles, fieldName, request);
+            request.body[fieldName] = await mapCallback(files.map(mapFileObject), fieldName, request);
         }
     } else if (fileConfig.type === 'fields') {
         const files = request.files as { [fieldname: string]: Express.Multer.File[] };
         if (files) {
-            for (let index = 0; index < Object.keys(files).length; index++) {
-                const fieldName = Object.keys(files)[index];
+            for (const fieldName of Object.keys(files)) {
                 if (!shouldSetBodyField(request, fieldName, overwrite)) continue;
-                const mappedFiles = files[fieldName].map(f => mapFileObject(f));
-                request.body[fieldName] = await mapCallback(mappedFiles, fieldName, request);
+                request.body[fieldName] = await mapCallback(files[fieldName].map(mapFileObject), fieldName, request);
             }
         }
     }
 }
 
+/** Build the multer middleware for the requested upload shape. */
+function buildMulterMiddleware(upload: multer.Multer, fileConfig: FileUploadConfig): RequestHandler {
+    switch (fileConfig.type) {
+        case 'single':
+            if (!fileConfig.fieldName) throw new Error('fieldName is required for single file upload.');
+            return upload.single(fileConfig.fieldName);
+        case 'array': {
+            if (!fileConfig.fieldName) throw new Error('fieldName is required for array file upload.');
+            const maxCount = fileConfig.maxCount ?? 10;
+            const baseName = fileConfig.fieldName;
+            // Accept both "files" (repeated) and "files[0]", "files[1]", ...
+            const fields = [
+                { name: baseName, maxCount },
+                ...Array.from({ length: maxCount }, (_, i) => ({ name: `${baseName}[${i}]`, maxCount: 1 })),
+            ];
+            return upload.fields(fields);
+        }
+        case 'fields':
+            if (!fileConfig.fields || !Array.isArray(fileConfig.fields)) {
+                throw new Error('fields array is required for multiple fields file upload.');
+            }
+            return upload.fields(fileConfig.fields);
+        default:
+            throw new Error('Invalid file upload type. Use "single", "array", or "fields".');
+    }
+}
+
+/** Translate raw multer limit errors into typed, 400-mapped exceptions. */
+function normalizeUploadError(err: unknown, validation?: UploadValidation): unknown {
+    if (err instanceof MulterError) {
+        if (err.code === 'LIMIT_FILE_SIZE') return new FileTooLargeException(validation?.maxSize);
+        if (err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_PART_COUNT') {
+            return new TooManyFilesException(validation?.maxFiles);
+        }
+        if (err.code === 'LIMIT_UNEXPECTED_FILE') {
+            return new BadRequestException(`Unexpected file field "${err.field ?? ''}".`);
+        }
+    }
+    return err;
+}
+
 /**
- * NestJS interceptor that parses multipart file uploads and uploads them to the configured
- * storage (local, S3, or Azure). Populates `request.body[fieldName]` with the result (e.g. key/url).
+ * NestJS interceptor that parses multipart uploads and stores them via the configured storage
+ * (built-in local/s3/azure, a custom driver, or a tenant's driver). Writes the result into
+ * `request.body[fieldName]` (key by default; customize with `mapToRequestBody`).
  *
- * @param fileConfig - Which form field(s) to accept: a string (single file, e.g. `'file'`), or
- * a config object for single/array/fields. See `FileUploadConfig`.
- * @param interceptorOptions - Optional overrides (storage, path, mapping, limits, etc.). See `FileStorageInterceptorOptions`.
- * @returns NestInterceptor to use with `@UseInterceptors(FileStorageInterceptor('file', { ... }))`
+ * @param fileConfig - Which field(s) to accept: a string for single file, or a {@link FileUploadConfig}.
+ * @param interceptorOptions - Per-route overrides (driver, naming, validation, mapping). See {@link FileStorageInterceptorOptions}.
  *
  * @example
- * // Controller: single file as 'file', use module default storage
  * @Post('upload')
  * @UseInterceptors(FileStorageInterceptor('file'))
  * upload(@Body() body: { file: string }) { return { key: body.file }; }
- *
- * @example
- * // Multiple files, max 5, custom path and body shape
- * @UseInterceptors(FileStorageInterceptor(
- *   { type: 'array', fieldName: 'images', maxCount: 5 },
- *   { fileDist: () => 'gallery', mapToRequestBody: (files) => files.map(f => f.key) }
- * ))
  */
 export function FileStorageInterceptor(
     fileConfig: FileUploadConfig | string,
     interceptorOptions?: FileStorageInterceptorOptions,
 ): NestInterceptor {
-    if (typeof fileConfig === 'string') {
-        fileConfig = {
-            type: 'single',
-            fieldName: fileConfig,
-        };
-    }
+    const config: FileUploadConfig =
+        typeof fileConfig === 'string' ? { type: 'single', fieldName: fileConfig } : fileConfig;
 
     return {
         async intercept(context: ExecutionContext, next: CallHandler) {
-            const options = FileStorageService.getOptions();
             const request = context.switchToHttp().getRequest<Request>();
             const response = context.switchToHttp().getResponse<Response>();
+            const registry = FileStorageRegistryHolder.get();
 
-            let storageType: FileStorageEnum;
-            let storageConfig: StorageOptions;
-
-            if ('storage' in options) {
-                storageType = interceptorOptions?.storageType ?? options.storage;
-                storageConfig = getStorageConfig(storageType, options);
-            } else {
-                storageType = interceptorOptions?.storageType ?? FileStorageEnum.LOCAL;
-                storageConfig = {} as StorageOptions;
-            }
-
-            const storageOptions: StorageOptions = {
-                ...storageConfig,
-                ...(interceptorOptions?.storageOptions ?? {}),
-                fileName: interceptorOptions?.fileName ?? storageConfig?.fileName,
-                fileDist: (file: Express.Multer.File, req: Request): string => {
-                    return (
-                        interceptorOptions?.fileDist?.(file, req) ??
-                        storageConfig?.fileDist?.(file, req) ??
-                        ''
-                    );
-                },
-                prefix: interceptorOptions?.prefix ?? storageConfig?.prefix,
-            };
-
-            const storage = await StorageFactory.createStorage(storageType, storageOptions);
-            // const multerInstance = multer({ storage });
-
-            const extra = interceptorOptions?.multerOptions?.(request, fileConfig);
-
-            const multerInstance = multer({
-                storage,
-                ...(extra?.limits ? { limits: extra.limits } : {}),
-                ...(extra?.fileFilter ? { fileFilter: extra.fileFilter } : {}),
+            const { driver, prefix: tenantPrefix } = await registry.resolveForRequest(request, {
+                driver: interceptorOptions?.driver,
+                tenant: interceptorOptions?.tenant,
             });
 
-            let multerMiddleware: RequestHandler;
-            switch (fileConfig.type) {
-                case 'single':
-                    if (!fileConfig.fieldName) {
-                        throw new Error('fieldName is required for single file upload.');
-                    }
-                    multerMiddleware = multerInstance.single(fileConfig.fieldName);
-                    break;
-                case 'array': {
-                    if (!fileConfig.fieldName) {
-                        throw new Error('fieldName is required for multiple file upload.');
-                    }
-                    const maxCount = fileConfig.maxCount ?? 10;
-                    const baseName = fileConfig.fieldName;
-                    // Accept both "productImages" (repeated) and "productImages[0]", "productImages[1]", ...
-                    const fields: { name: string; maxCount: number }[] = [
-                        { name: baseName, maxCount },
-                        ...Array.from({ length: maxCount }, (_, i) => ({ name: `${baseName}[${i}]`, maxCount: 1 })),
-                    ];
-                    multerMiddleware = multerInstance.fields(fields);
-                    break;
-                }
-                case 'fields':
-                    if (!fileConfig.fields || !Array.isArray(fileConfig.fields)) {
-                        throw new Error('fields array is required for multiple fields file upload.');
-                    }
-                    multerMiddleware = multerInstance.fields(fileConfig.fields);
-                    break;
-                default:
-                    throw new Error('Invalid file upload type. Use "single", "array", or "fields".');
-            }
+            const validation = mergeValidation(registry.defaultValidation, interceptorOptions?.validation);
+            const prefix = joinKey(tenantPrefix, interceptorOptions?.prefix) || undefined;
+
+            const engine = new DriverMulterEngine(driver, {
+                fileName: interceptorOptions?.fileName,
+                fileDist: interceptorOptions?.fileDist,
+                prefix,
+            });
+
+            const upload = multer({
+                storage: engine,
+                ...(toMulterLimits(validation) ? { limits: toMulterLimits(validation) } : {}),
+                ...(buildFileFilter(validation) ? { fileFilter: buildFileFilter(validation) } : {}),
+            });
+
+            const middleware = buildMulterMiddleware(upload, config);
 
             await new Promise<void>((resolve, reject) => {
-                multerMiddleware(request, response, (err: unknown) => {
-                    if (err) {
-                        // Preserve original error object if possible (MulterError, BadRequestException, etc.)
-                        if (err instanceof Error) return reject(err);
-
-                        // fallback: convert to Error
-                        return reject(new Error(typeof err === 'string' ? err : JSON.stringify(err)));
-                    }
-                    resolve();
+                middleware(request, response, (err: unknown) => {
+                    if (!err) return resolve();
+                    const mapped = normalizeUploadError(err, validation);
+                    if (mapped instanceof Error) return reject(mapped);
+                    return reject(new Error(typeof mapped === 'string' ? mapped : JSON.stringify(mapped)));
                 });
             });
 
             if (interceptorOptions?.afterUpload) {
-                await interceptorOptions.afterUpload(request, fileConfig);
+                await interceptorOptions.afterUpload(request, config);
             }
 
-            // Apply file key mapping after multer processing
-            await applyFileKeyMapping(request, fileConfig, interceptorOptions);
+            await applyFileKeyMapping(request, config, interceptorOptions);
 
             return next.handle();
-        }
+        },
     };
 }

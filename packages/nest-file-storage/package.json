@@ -1,7 +1,7 @@
 {
   "name": "@ackplus/nest-file-storage",
   "version": "1.1.23",
-  "description": "A flexible and feature-rich file storage solution for NestJS applications with support for local, S3, and Azure Blob Storage",
+  "description": "One file-storage API for NestJS — Local, S3, Azure, and custom drivers, with per-request/multi-tenant storage, declarative validation, and a unified file model.",
   "author": "AckPlus",
   "license": "MIT",
   "main": "dist/index.js",
@@ -9,6 +9,8 @@
   "files": [
     "dist",
     "README.md",
+    "MIGRATION.md",
+    "CHANGELOG.md",
     "examples",
     "LICENSE"
   ],
@@ -24,7 +26,12 @@
     "file-management",
     "nestjs-storage",
     "aws-s3",
-    "azure-storage"
+    "azure-storage",
+    "multi-tenant",
+    "custom-storage",
+    "storage-driver",
+    "minio",
+    "cloudflare-r2"
   ],
   "repository": {
     "type": "git",
@@ -38,7 +45,10 @@
     "clean": "rm -rf dist tsconfig.build.tsbuildinfo",
     "build": "pnpm clean && pnpm -C ../.. exec tsc -p packages/nest-file-storage/tsconfig.build.json",
     "format": "prettier --write \"src/**/*.ts\"",
-    "lint": "eslint \"src/**/*.ts\" --fix"
+    "lint": "eslint \"src/**/*.ts\" --fix",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "peerDependencies": {
     "@nestjs/common": "^10.0.0 || ^11.0.0",
@@ -73,6 +83,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@types/concat-stream": "^2.0.3",
     "@types/express": "^5.0.0",
+    "@types/jest": "^30.0.0",
     "@types/multer": "^1.4.12",
     "@types/node": "^22.10.7",
     "@types/uuid": "^10.0.0",
@@ -80,8 +91,10 @@
     "eslint-config-prettier": "^10.0.1",
     "eslint-plugin-prettier": "^5.2.2",
     "globals": "^16.0.0",
+    "jest": "^30.0.0",
     "multer": "^1.4.5-lts.1",
     "prettier": "^3.4.2",
+    "ts-jest": "^29.2.5",
     "typescript": "^5.7.3",
     "typescript-eslint": "^8.20.0"
   }

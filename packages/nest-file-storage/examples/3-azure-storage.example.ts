@@ -1,28 +1,30 @@
 /**
  * Example 3: Azure Blob Storage Configuration
- * 
- * This example shows how to configure Azure Blob Storage.
- * Requires: @azure/storage-blob
+ *
+ * Requires: @azure/storage-blob (loaded lazily).
  */
 
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { NestFileStorageModule, FileStorageEnum } from '@ackplus/nest-file-storage';
+import { NestFileStorageModule, azureDriver } from '@ackplus/nest-file-storage';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
     NestFileStorageModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        storage: FileStorageEnum.AZURE,
-        azureConfig: {
-          account: configService.get('AZURE_STORAGE_ACCOUNT'),
-          accountKey: configService.get('AZURE_STORAGE_KEY'),
-          container: configService.get('AZURE_CONTAINER', 'uploads'),
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        default: 'azure',
+        drivers: {
+          azure: azureDriver({
+            account: config.getOrThrow('AZURE_STORAGE_ACCOUNT'),
+            accountKey: config.getOrThrow('AZURE_STORAGE_KEY'),
+            container: config.get('AZURE_CONTAINER', 'uploads'),
+            cdnUrl: config.get('AZURE_CDN_URL'), // optional CDN for getSignedUrl()
+          }),
         },
       }),
-      inject: [ConfigService],
     }),
   ],
 })
@@ -32,4 +34,4 @@ export class AppModule {}
 // AZURE_STORAGE_ACCOUNT=your-account-name
 // AZURE_STORAGE_KEY=your-account-key
 // AZURE_CONTAINER=uploads
-
+// AZURE_CDN_URL=https://cdn.example.com  (optional)
