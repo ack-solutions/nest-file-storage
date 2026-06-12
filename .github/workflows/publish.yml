@@ -43,10 +43,22 @@ jobs:
             echo "dist_tag=latest" >> "$GITHUB_OUTPUT"
           fi
 
-      - name: Check if already published
+      - name: Decide whether to release
         id: check
         shell: bash
         run: |
+          # Opt-out: a [skip release] / [no release] / [skip ci] marker in the head commit message
+          # skips publishing on a push (e.g. when you bump the version but aren't ready to ship).
+          # Manual runs (the "Run workflow" button) ignore the marker and always attempt a release.
+          if [ "${{ github.event_name }}" = "push" ]; then
+            MSG="$(git log -1 --pretty=%B)"
+            if printf '%s' "$MSG" | grep -qiE '\[(skip release|release skip|no release|skip ci)\]'; then
+              echo "release=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Skip marker found in the commit message — skipping release."
+              exit 0
+            fi
+          fi
+
           PUBLISHED="$(npm view "@ackplus/nest-file-storage@${{ steps.pkg.outputs.version }}" version 2>/dev/null || true)"
           if [ -n "$PUBLISHED" ]; then
             echo "release=false" >> "$GITHUB_OUTPUT"
