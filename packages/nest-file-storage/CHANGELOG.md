@@ -3,7 +3,7 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
-## [2.0.0] - Unreleased
+## [2.0.0] - 2026-06-13
 
 A redesign around a **driver registry**. Custom storage providers now work everywhere, storage can be
 chosen per request (including multi-tenant), validation is declarative, and the service is injectable.
