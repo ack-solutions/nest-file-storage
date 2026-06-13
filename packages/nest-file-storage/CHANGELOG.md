@@ -3,6 +3,14 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [2.0.1] - 2026-06-13
+
+### Changed
+
+- Docs only. Trimmed the npm README to a concise landing page that links into the
+  [documentation site](https://ack-solutions.github.io/nest-file-storage/), and added documentation
+  links + badges to the package README and the repo root. No code or API changes.
+
 ## [2.0.0] - 2026-06-13
 
 A redesign around a **driver registry**. Custom storage providers now work everywhere, storage can be

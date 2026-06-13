@@ -1,6 +1,6 @@
 {
   "name": "@ackplus/nest-file-storage",
-  "version": "2.0.0",
+  "version": "2.0.1",
   "description": "One file-storage API for NestJS — Local, S3, Azure, and custom drivers, with per-request/multi-tenant storage, declarative validation, and a unified file model.",
   "author": "AckPlus",
   "license": "MIT",
