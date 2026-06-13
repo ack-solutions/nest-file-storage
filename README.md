@@ -1,8 +1,18 @@
 # nest-file-storage
 
-Monorepo for `@ackplus/nest-file-storage`, a NestJS library for uploading files to Local storage, AWS S3, and Azure Blob Storage.
+[![npm](https://img.shields.io/npm/v/@ackplus/nest-file-storage.svg)](https://www.npmjs.com/package/@ackplus/nest-file-storage)
+[![docs](https://img.shields.io/badge/docs-website-3b82f6.svg)](https://ack-solutions.github.io/nest-file-storage/)
+[![license](https://img.shields.io/npm/l/@ackplus/nest-file-storage.svg)](./packages/nest-file-storage/LICENSE)
 
-The package-level developer guide lives in [`packages/nest-file-storage/README.md`](./packages/nest-file-storage/README.md). Start there if you want to use the library in an application.
+Monorepo for **[`@ackplus/nest-file-storage`](https://www.npmjs.com/package/@ackplus/nest-file-storage)** — a NestJS library for uploading files to Local storage, AWS S3, Azure Blob, or your own custom driver.
+
+## 📖 Documentation → <https://ack-solutions.github.io/nest-file-storage/>
+
+**New here? Start at the [documentation site](https://ack-solutions.github.io/nest-file-storage/)** — getting started, providers, custom drivers, multi-tenant, validation, the API reference, and the v1 → v2 migration guide.
+
+- 📦 npm: <https://www.npmjs.com/package/@ackplus/nest-file-storage>
+- 💻 GitHub: <https://github.com/ack-solutions/nest-file-storage>
+- 📂 Library source & quick-start README: [`packages/nest-file-storage/`](./packages/nest-file-storage)
 
 - 📖 **Documentation:** <https://ack-solutions.github.io/nest-file-storage/>
 - 📦 **npm:** <https://www.npmjs.com/package/@ackplus/nest-file-storage>
