@@ -3,7 +3,12 @@
 > One file-storage API for NestJS — Local, S3, Azure, or your own driver. Upload through a controller interceptor or call it directly. Pick storage **per request** (great for multi-tenant apps), validate declaratively, and store one consistent file shape everywhere.
 
 [![npm](https://img.shields.io/npm/v/@ackplus/nest-file-storage.svg)](https://www.npmjs.com/package/@ackplus/nest-file-storage)
+[![docs](https://img.shields.io/badge/docs-website-3b82f6.svg)](https://ack-solutions.github.io/nest-file-storage/)
 [![license](https://img.shields.io/npm/l/@ackplus/nest-file-storage.svg)](./LICENSE)
+
+📖 **[Read the full documentation →](https://ack-solutions.github.io/nest-file-storage/)** &nbsp;·&nbsp; 📦 [npm](https://www.npmjs.com/package/@ackplus/nest-file-storage) &nbsp;·&nbsp; 💻 [GitHub](https://github.com/ack-solutions/nest-file-storage)
+
+> This page is a quick reference. The **[documentation site](https://ack-solutions.github.io/nest-file-storage/)** has the full guides, driver setup, and examples.
 
 ---
 

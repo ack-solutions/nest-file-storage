@@ -4,6 +4,10 @@ Monorepo for `@ackplus/nest-file-storage`, a NestJS library for uploading files 
 
 The package-level developer guide lives in [`packages/nest-file-storage/README.md`](./packages/nest-file-storage/README.md). Start there if you want to use the library in an application.
 
+- 📖 **Documentation:** <https://ack-solutions.github.io/nest-file-storage/>
+- 📦 **npm:** <https://www.npmjs.com/package/@ackplus/nest-file-storage>
+- 💻 **GitHub:** <https://github.com/ack-solutions/nest-file-storage>
+
 ## Workspace Layout
 
 ```text
@@ -17,6 +21,8 @@ The package-level developer guide lives in [`packages/nest-file-storage/README.m
 
 ## Main Docs
 
+- 📖 Documentation site: <https://ack-solutions.github.io/nest-file-storage/>
+- 📦 npm package: <https://www.npmjs.com/package/@ackplus/nest-file-storage>
 - Library guide: [`packages/nest-file-storage/README.md`](./packages/nest-file-storage/README.md)
 - Example app guide: [`apps/example-app/README.md`](./apps/example-app/README.md)
 - Package examples: [`packages/nest-file-storage/examples/`](./packages/nest-file-storage/examples/)
