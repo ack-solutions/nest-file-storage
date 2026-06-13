@@ -14,6 +14,10 @@ Monorepo for **[`@ackplus/nest-file-storage`](https://www.npmjs.com/package/@ack
 - 💻 GitHub: <https://github.com/ack-solutions/nest-file-storage>
 - 📂 Library source & quick-start README: [`packages/nest-file-storage/`](./packages/nest-file-storage)
 
+- 📖 **Documentation:** <https://ack-solutions.github.io/nest-file-storage/>
+- 📦 **npm:** <https://www.npmjs.com/package/@ackplus/nest-file-storage>
+- 💻 **GitHub:** <https://github.com/ack-solutions/nest-file-storage>
+
 ## Workspace Layout
 
 ```text

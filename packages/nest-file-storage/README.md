@@ -4,6 +4,7 @@
 
 [![npm](https://img.shields.io/npm/v/@ackplus/nest-file-storage.svg)](https://www.npmjs.com/package/@ackplus/nest-file-storage)
 [![docs](https://img.shields.io/badge/docs-website-3b82f6.svg)](https://ack-solutions.github.io/nest-file-storage/)
+
 [![downloads](https://img.shields.io/npm/dm/@ackplus/nest-file-storage.svg)](https://www.npmjs.com/package/@ackplus/nest-file-storage)
 [![license](https://img.shields.io/npm/l/@ackplus/nest-file-storage.svg)](./LICENSE)
 
