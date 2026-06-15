@@ -3,6 +3,16 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [2.0.2] - 2026-06-15
+
+### Changed
+
+- **`forRootAsync` accepts the v1 config shape too** — `useFactory` and
+  `FileStorageOptionsFactory.createFileStorageOptions()` now return the `FileStorageModuleOptionsInput`
+  union (v2 options **or** a v1 `{ storage, *Config }`), matching `forRoot()`. The v1→v2 translation
+  already ran in the async path at runtime; this only widens the **types** so a v1-returning async
+  factory type-checks. Non-breaking (type widening; existing v2-returning factories are unaffected).
+
 ## [2.0.1] - 2026-06-13
 
 ### Changed

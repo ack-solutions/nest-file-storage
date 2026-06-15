@@ -80,7 +80,8 @@ export interface FileStorageModuleOptions {
 
 /** Factory that produces module options, for `forRootAsync({ useClass | useExisting })`. */
 export interface FileStorageOptionsFactory {
-    createFileStorageOptions(): Promise<FileStorageModuleOptions> | FileStorageModuleOptions;
+    /** May return the v2 options, or a v1 config (translated by the compat shim, same as `forRoot()`). */
+    createFileStorageOptions(): Promise<FileStorageModuleOptionsInput> | FileStorageModuleOptionsInput;
 }
 
 /** Async configuration for `NestFileStorageModule.forRootAsync()`. */
@@ -89,13 +90,19 @@ export interface FileStorageAsyncOptions extends Pick<ModuleMetadata, 'imports'>
     useExisting?: Type<FileStorageOptionsFactory>;
     /** Instantiate a class that implements {@link FileStorageOptionsFactory}. */
     useClass?: Type<FileStorageOptionsFactory>;
-    /** Build options from injected dependencies (the common case for DB/config-driven setups). */
-    useFactory?: (...args: any[]) => Promise<FileStorageModuleOptions> | FileStorageModuleOptions;
+    /**
+     * Build options from injected dependencies (the common case for DB/config-driven setups).
+     * May return the v2 options, or a v1 config (translated by the compat shim, same as `forRoot()`).
+     */
+    useFactory?: (...args: any[]) => Promise<FileStorageModuleOptionsInput> | FileStorageModuleOptionsInput;
     /** Providers to inject into `useFactory`. */
     inject?: any[];
 }
 
-/** Accepted by `forRoot()`: the v2 options, or a v1 config (translated by the compat shim). */
+/**
+ * Accepted by `forRoot()`, `forRootAsync({ useFactory })`, and `FileStorageOptionsFactory`:
+ * the v2 options, or a v1 config (translated by the compat shim).
+ */
 export type FileStorageModuleOptionsInput = FileStorageModuleOptions | V1FileStorageModuleOptions;
 
 // ===========================================================================
