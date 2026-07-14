@@ -8,6 +8,10 @@ sidebar_position: 8
 
 Declare limits as **data** — at the module level (applies to every route) and/or per route (merged over the module default). Rejections throw typed `400`s before your handler runs.
 
+:::note This is *file* validation, not DTO validation
+This page covers validating the uploaded **file** (size, type, count). It's separate from NestJS's `class-validator` `ValidationPipe`, which validates your **body DTO**. If you run a global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`, the interceptor's default body write-back can trip `property "<field>" should not exist` — see [Global ValidationPipe](./uploading#global-validationpipe-forbidnonwhitelisted) for the one-line fix (`writeToBody: false`).
+:::
+
 ```ts
 // module-wide default
 NestFileStorageModule.forRoot({

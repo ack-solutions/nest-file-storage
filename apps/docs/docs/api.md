@@ -20,6 +20,7 @@ interface FileStorageModuleOptions {
   default: string;                          // name of the default driver (a key in `drivers`)
   drivers: Record<string, DriverFactory>;   // named drivers
   validation?: UploadValidation;            // module-wide default validation
+  writeToBody?: boolean;                    // write the stored key to request.body[field]? default true
   tenant?: TenantOptions;                   // optional multi-tenant resolution
 }
 ```
@@ -77,6 +78,7 @@ interface FileStorageInterceptorOptions {
   fileDist?: (file, req?) => string | Promise<string>;
   prefix?: string;
   validation?: UploadValidation;
+  writeToBody?: boolean; // override the module writeToBody for this route
   mapToRequestBody?: (file, fieldName, req?) => unknown | Promise<unknown>;
   overwriteBodyField?: boolean; // default true
   afterUpload?: (req, fileConfig) => void | Promise<void>;
