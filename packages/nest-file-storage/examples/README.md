@@ -16,6 +16,7 @@ Runnable-style snippets for `@ackplus/nest-file-storage` (v2). Copy what you nee
 4. **[Upload controller](./4-upload-controller.example.ts)** — single / array / fields, and declarative validation.
 7. **[User avatar](./7-user-avatar.example.ts)** — validation, old-file cleanup, DB update.
 8. **[Document management](./8-document-management.example.ts)** — upload, download, copy, delete.
+13. **[Strict ValidationPipe](./13-validation-pipe.example.ts)** — `writeToBody: false` + `@UploadedFile()` under `forbidNonWhitelisted`.
 
 ## Programmatic & advanced
 

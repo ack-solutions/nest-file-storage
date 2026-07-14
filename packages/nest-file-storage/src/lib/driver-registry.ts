@@ -29,6 +29,7 @@ export class DriverRegistry {
     private readonly defaultName: string;
     private readonly tenant?: TenantOptions;
     private readonly validation?: UploadValidation;
+    private readonly writeToBody?: boolean;
     private readonly instanceCache = new Map<string, StorageDriver>();
     private readonly tenantCache = new Map<string, TenantCacheEntry>();
     private readonly tenantCacheMax: number;
@@ -39,6 +40,7 @@ export class DriverRegistry {
         this.defaultName = options.default;
         this.tenant = options.tenant;
         this.validation = options.validation;
+        this.writeToBody = options.writeToBody;
         this.tenantCacheMax = options.tenant?.cache?.max ?? DEFAULT_TENANT_CACHE_MAX;
         this.tenantTtlMs = options.tenant?.cache?.ttlMs;
 
@@ -57,6 +59,15 @@ export class DriverRegistry {
     /** Module-level default validation, merged with per-route validation by the interceptor. */
     get defaultValidation(): UploadValidation | undefined {
         return this.validation;
+    }
+
+    /**
+     * Whether the interceptor writes the stored key to `request.body[field]` by default (default `true`).
+     * A per-route `writeToBody` overrides this. Turn it off module-wide for apps using a global
+     * `forbidNonWhitelisted` ValidationPipe.
+     */
+    get defaultWriteToBody(): boolean {
+        return this.writeToBody !== false;
     }
 
     hasTenantResolution(): boolean {

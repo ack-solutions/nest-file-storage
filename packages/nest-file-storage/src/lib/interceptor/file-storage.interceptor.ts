@@ -59,7 +59,17 @@ export type FileStorageInterceptorOptions = {
     validation?: UploadValidation;
 
     /**
-     * Define what is written to `request.body[fieldName]` after upload.
+     * Whether to write the stored key onto `request.body[fieldName]` for this route. Overrides the
+     * module-level `writeToBody` (which defaults to `true`).
+     *
+     * Set `false` to keep the body clean under a global
+     * `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })` when the DTO doesn't declare
+     * the file field — read the result from `@UploadedFile()` / `request.file` instead.
+     */
+    writeToBody?: boolean;
+
+    /**
+     * Define what is written to `request.body[fieldName]` after upload (when `writeToBody` is on).
      * Default: single → `file.key`, array → `file[].key`.
      */
     mapToRequestBody?: (file: UploadedFile | UploadedFile[], fieldName: string, req?: Request) => unknown | Promise<unknown>;
@@ -123,11 +133,17 @@ function shouldSetBodyField(request: Request, fieldName: string, overwriteBodyFi
     return request.body[fieldName] === undefined;
 }
 
-async function applyFileKeyMapping(
+/** @internal Exported for unit tests. */
+export async function applyFileKeyMapping(
     request: Request,
     fileConfig: FileUploadConfig,
-    interceptorOptions?: FileStorageInterceptorOptions,
+    interceptorOptions: FileStorageInterceptorOptions | undefined,
+    writeToBody: boolean,
 ): Promise<void> {
+    // Opt-out: leave request.body untouched (e.g. under a global forbidNonWhitelisted ValidationPipe;
+    // the file is still available via @UploadedFile() / request.file).
+    if (!writeToBody) return;
+
     const overwrite = interceptorOptions?.overwriteBodyField !== false;
     const mapCallback: (file: UploadedFile | UploadedFile[], fieldName: string, req?: Request) => unknown =
         interceptorOptions?.mapToRequestBody ??
@@ -208,8 +224,13 @@ function normalizeUploadError(err: unknown, validation?: UploadValidation): unkn
 
 /**
  * NestJS interceptor that parses multipart uploads and stores them via the configured storage
- * (built-in local/s3/azure, a custom driver, or a tenant's driver). Writes the result into
- * `request.body[fieldName]` (key by default; customize with `mapToRequestBody`).
+ * (built-in local/s3/azure, a custom driver, or a tenant's driver). By default it also writes the
+ * result into `request.body[fieldName]` (the key; customize with `mapToRequestBody`).
+ *
+ * The uploaded file is always available via `@UploadedFile()` / `request.file` regardless of that
+ * write-back. If you run a global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`
+ * and your DTO doesn't declare the file field, disable the write-back with `writeToBody: false`
+ * (per route) or `writeToBody: false` in the module options, and read the file from `@UploadedFile()`.
  *
  * @param fileConfig - Which field(s) to accept: a string for single file, or a {@link FileUploadConfig}.
  * @param interceptorOptions - Per-route overrides (driver, naming, validation, mapping). See {@link FileStorageInterceptorOptions}.
@@ -267,7 +288,8 @@ export function FileStorageInterceptor(
                 await interceptorOptions.afterUpload(request, config);
             }
 
-            await applyFileKeyMapping(request, config, interceptorOptions);
+            const writeToBody = interceptorOptions?.writeToBody ?? registry.defaultWriteToBody;
+            await applyFileKeyMapping(request, config, interceptorOptions, writeToBody);
 
             return next.handle();
         },

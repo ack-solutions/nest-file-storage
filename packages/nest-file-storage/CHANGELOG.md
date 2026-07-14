@@ -3,6 +3,26 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [2.1.0] - 2026-07-14
+
+### Added
+
+- **`writeToBody` option** — module-level (`FileStorageModuleOptions.writeToBody`) and per-route
+  (`FileStorageInterceptor('file', { writeToBody: false })`) — controls whether the interceptor writes
+  the stored key onto `request.body[field]`. Defaults to `true` (unchanged behavior); a per-route value
+  overrides the module default.
+
+### Fixed
+
+- **Uploads no longer fail under a global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`.**
+  Interceptors run before pipes, so the interceptor's default body write-back put a server-derived `key`
+  on `request.body[field]` that a (correctly) file-less DTO then rejected with
+  `property "<field>" should not exist` — 400-ing every multipart upload. Set `writeToBody: false`
+  (module-wide or per route) to leave the body untouched and read the file from `@UploadedFile()`
+  instead. Non-breaking: the write-back stays on by default. See the
+  [Global ValidationPipe](https://ack-solutions.github.io/nest-file-storage/uploading#global-validationpipe-forbidnonwhitelisted)
+  docs.
+
 ## [2.0.2] - 2026-06-15
 
 ### Changed

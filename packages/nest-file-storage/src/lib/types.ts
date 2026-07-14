@@ -74,6 +74,17 @@ export interface FileStorageModuleOptions {
     drivers: Record<string, DriverFactory>;
     /** Default upload validation applied to every route (overridable per route). */
     validation?: UploadValidation;
+    /**
+     * Whether the interceptor writes the stored key onto `request.body[field]` after an upload.
+     * Default `true`.
+     *
+     * Set `false` when you run a global `ValidationPipe({ whitelist: true, forbidNonWhitelisted: true })`
+     * and your upload DTOs don't declare the file field: the server-derived key would otherwise trip
+     * `property "<field>" should not exist`. With it off, the body is left untouched — read the result
+     * from `@UploadedFile()` / `request.file` instead. Override per route with the interceptor's
+     * `writeToBody`.
+     */
+    writeToBody?: boolean;
     /** Optional multi-tenant / dynamic per-request storage resolution. */
     tenant?: TenantOptions;
 }

@@ -6,7 +6,7 @@ sidebar_position: 7
 
 # Uploading in controllers
 
-`FileStorageInterceptor(field, options?)` accepts `multipart/form-data`, stores the file(s), and writes the result into `request.body`.
+`FileStorageInterceptor(field, options?)` accepts `multipart/form-data`, stores the file(s), and — by default — writes the result into `request.body`. The stored file is **always** available via `@UploadedFile()` / `request.file` regardless of that write-back, which matters when you run a strict global `ValidationPipe` (see [below](#global-validationpipe-forbidnonwhitelisted)).
 
 ## Upload modes
 
@@ -64,7 +64,7 @@ Precedence: an explicit `driver` wins, then [tenant resolution](./multi-tenant),
 
 ## Map the result into the body
 
-By default the interceptor writes the storage **key**. Customize with `mapToRequestBody`:
+By default the interceptor writes the storage **key** onto `request.body[field]`. Customize with `mapToRequestBody`:
 
 ```ts
 FileStorageInterceptor('document', {
@@ -74,6 +74,47 @@ FileStorageInterceptor('document', {
 ```
 
 Set `overwriteBodyField: false` to keep an existing body value (e.g. a JSON field with the same name on a PATCH).
+
+## Global ValidationPipe (`forbidNonWhitelisted`)
+
+A common NestJS setup registers a strict global pipe:
+
+```ts
+app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
+```
+
+Interceptors run **before** pipes, so by the time the pipe validates the body, the interceptor has already written the storage key onto `request.body[field]`. The key is server-derived, so your upload DTO normally shouldn't declare it — which means `forbidNonWhitelisted` rejects the request with **`property "<field>" should not exist`**, and *every* upload 400s.
+
+Fix it by turning the body write-back off and reading the file from `@UploadedFile()` instead (it's always attached, with `.key`, `.url`, …):
+
+**Module-wide** — recommended when you have a global strict pipe:
+
+```ts
+NestFileStorageModule.forRoot({
+  default: 'local',
+  drivers: { local: localDriver({ rootPath: './uploads', baseUrl: 'http://localhost:3000/uploads' }) },
+  writeToBody: false, // leave request.body untouched
+});
+```
+
+**Per route** — overrides the module setting:
+
+```ts
+import { Body, Controller, Post, UploadedFile, UseInterceptors } from '@nestjs/common';
+
+@Post('documents')
+@UseInterceptors(FileStorageInterceptor('file', { writeToBody: false }))
+create(
+  @Body() dto: CreateDocumentDto,                          // validates clean — no `file` property
+  @UploadedFile() file: Express.Multer.File & { key: string; url: string },
+) {
+  return this.documents.create(dto, file.key);             // key comes from the file, not the body
+}
+```
+
+:::tip
+Prefer `@UploadedFile()` over the body write-back in strict-validation apps. If you'd rather keep the write-back, the alternative is to declare an optional, unvalidated field on the DTO so it's whitelisted — but that leaks a server-derived value into your DTO, so `writeToBody: false` is cleaner.
+:::
 
 ## Post-upload hook
 
