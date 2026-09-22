@@ -1,4 +1,9 @@
 {
   "extends": "./tsconfig.json",
+  "compilerOptions": {
+    // `build` always starts from a clean dist/, so an incremental cache is never reused —
+    // it would only be written into dist/ and shipped in the npm tarball.
+    "incremental": false
+  },
   "exclude": ["node_modules", "test", "dist", "examples", "**/*spec.ts", "**/*.example.ts"]
 }
