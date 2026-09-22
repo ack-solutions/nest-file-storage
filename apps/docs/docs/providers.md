@@ -43,6 +43,10 @@ s3Driver({
 
 Requires `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (loaded lazily). `getSignedUrl(key, { expiresIn })` returns a presigned URL.
 
+:::tip Sharing a bucket with other apps
+Add `prefix: 'my-app'` to keep this app's files in their own folder. It's the base path for every upload through the driver — tenant and route prefixes nest inside it (`my-app/tenants/acme/avatars/…`), so no call site has to remember it. Works the same for Azure containers and local roots.
+:::
+
 ## Azure Blob Storage
 
 ```ts

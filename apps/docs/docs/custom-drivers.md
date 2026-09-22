@@ -26,6 +26,8 @@ interface StorageDriver {
 
 Only the required methods matter; implement `getSignedUrl` / `path` if your backend supports them.
 
+To support upload key defaults, expose `keyDefaults` (the built-in drivers fill it from their options — `defineDriver` doesn't do it for you): `fileName` / `fileDist` apply when a route doesn't set its own, and `prefix` is always the base path that tenant and route prefixes nest inside. See [How a key is built](./concepts#how-a-key-is-built).
+
 ## Example: Google Cloud Storage
 
 ```ts

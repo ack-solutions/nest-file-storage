@@ -6,13 +6,22 @@ import type { Request } from 'express';
  */
 export type FileKeyResolver = (file: Express.Multer.File, req?: Request) => string | Promise<string>;
 
-/** Default key-generation hooks a driver can carry; overridable per upload route. */
+/**
+ * Default key-generation hooks a driver can carry for uploads. Keys are built as
+ * `prefix / tenantPrefix / routePrefix / fileDist / fileName`.
+ */
 export interface KeyOptions {
-    /** Returns the final filename segment of the key (e.g. `uuid-photo.png`). */
+    /** Returns the final filename segment of the key (e.g. `uuid-photo.png`). A route's `fileName` replaces it. */
     fileName?: FileKeyResolver;
-    /** Returns the directory/path prefix of the key (e.g. `2026/06/12`). Relative. */
+    /** Returns the directory segment of the key (e.g. `2026/06/12`). Relative. A route's `fileDist` replaces it. */
     fileDist?: FileKeyResolver;
-    /** Static key prefix prepended to every key (e.g. `tenant-42`). */
+    /**
+     * Base path for every upload through this driver (e.g. `my-app` to keep one app's files in its own
+     * folder of a shared bucket). Tenant and route prefixes nest inside it — it is never replaced.
+     *
+     * Applied by the upload engine (the interceptor). `putFile(content, key)` stores at exactly `key`;
+     * to match uploads when building keys yourself, use `joinKey(driver.keyDefaults?.prefix, …)`.
+     */
     prefix?: string;
 }
 
@@ -68,7 +77,10 @@ export interface UploadedFile {
  * so a custom driver works in both the interceptor and the service with no extra code.
  */
 export interface StorageDriver {
-    /** Optional default key-generation hooks used by the upload engine when a route doesn't override them. */
+    /**
+     * Optional default key-generation hooks used by the upload engine: `fileName` / `fileDist` apply
+     * when a route doesn't set its own; `prefix` is always the base path (route/tenant prefixes nest inside).
+     */
     readonly keyDefaults?: KeyOptions;
 
     /** Upload `content` to `key` and return canonical metadata. */

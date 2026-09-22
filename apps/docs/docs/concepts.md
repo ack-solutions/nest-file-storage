@@ -67,7 +67,14 @@ Store `key` in your database. Build `url` on demand with `getUrl(key)` — URLs 
 When uploading, the final storage key is:
 
 ```text
-joinKey(prefix, fileDist, fileName)
+driverPrefix / tenantPrefix / routePrefix / fileDist / fileName
 ```
 
-Defaults: `fileDist` = `YYYY/MM/DD`, `fileName` = `uuid-originalname`. You override `fileDist`/`fileName`/`prefix` per route (see [Uploading](./uploading#control-the-stored-key)) or per driver. A tenant `prefix` is prepended automatically for [folder isolation](./multi-tenant).
+- **Prefixes compose.** Each is optional, and they nest in that order: a driver `prefix` is the base path for everything uploaded through that driver, a [tenant prefix](./multi-tenant) isolates tenants inside it, and a route `prefix` is a folder inside that. Setting one never discards another.
+- **`fileDist` / `fileName` override.** A route's hook replaces the driver's, which replaces the built-in default (`YYYY/MM/DD`, `uuid-originalname`). See [Uploading](./uploading#control-the-stored-key).
+
+For example, `s3Driver({ …, prefix: 'my-app' })` + a tenant resolved to `prefix: 'tenants/acme'` + `FileStorageInterceptor('avatar', { prefix: 'avatars' })` stores at `my-app/tenants/acme/avatars/2026/09/22/uuid-photo.png` — the natural way to keep one app's files in its own folder of a bucket shared with other apps.
+
+:::note
+Prefixes are applied by the upload engine. `putFile(content, key)` stores at exactly the `key` you pass — when building keys yourself, compose them the same way with the exported `joinKey` helper (see [Programmatic access](./multi-tenant#programmatic-access)).
+:::
