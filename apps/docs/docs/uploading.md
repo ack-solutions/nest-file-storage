@@ -50,7 +50,9 @@ FileStorageInterceptor('avatar', {
 // -> public/users/42/avatars/1713876155123.png
 ```
 
-The final key is `joinKey(prefix, fileDist, fileName)`. Defaults: `fileDist` = `YYYY/MM/DD`, `fileName` = `uuid-originalname`. Both callbacks can be async.
+The final key is `driverPrefix / tenantPrefix / routePrefix / fileDist / fileName`. Defaults: `fileDist` = `YYYY/MM/DD`, `fileName` = `uuid-originalname`. Both callbacks can be async.
+
+A route's `fileDist` / `fileName` **replace** the driver's, but its `prefix` **nests inside** the driver's. So on a driver registered with `prefix: 'my-app'`, the example above stores at `my-app/public/users/42/avatars/1713876155123.png`. See [How a key is built](./concepts#how-a-key-is-built).
 
 ## Choose the driver per route
 

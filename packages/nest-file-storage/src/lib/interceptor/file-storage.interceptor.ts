@@ -46,13 +46,16 @@ export type FileStorageInterceptorOptions = {
      */
     driver?: string | ((req: Request) => string);
 
-    /** Custom filename segment (the last path segment of the key). Overrides driver defaults. */
+    /** Custom filename segment (the last path segment of the key). Replaces the driver's `fileName`. */
     fileName?: (file: Express.Multer.File, req?: Request) => string | Promise<string>;
 
-    /** Custom directory/path prefix (relative). Overrides driver defaults. */
+    /** Custom directory segment (relative), placed after all prefixes. Replaces the driver's `fileDist`. */
     fileDist?: (file: Express.Multer.File, req?: Request) => string | Promise<string>;
 
-    /** Static key prefix for this route. Combined with any tenant prefix. */
+    /**
+     * Static folder for this route. Composes with — never replaces — the other prefixes:
+     * `driverPrefix / tenantPrefix / routePrefix / fileDist / fileName`.
+     */
     prefix?: string;
 
     /** Declarative validation for this route, merged over the module-level defaults. */

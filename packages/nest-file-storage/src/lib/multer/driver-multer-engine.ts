@@ -7,8 +7,11 @@ import type { FileKeyResolver, StorageDriver, UploadedFile } from '../drivers/dr
 
 /** Per-request key-generation overrides handed to the engine by the interceptor. */
 export interface EngineKeyOptions {
+    /** Replaces the driver's `fileName` hook for this request. */
     fileName?: FileKeyResolver;
+    /** Replaces the driver's `fileDist` hook for this request. */
     fileDist?: FileKeyResolver;
+    /** Per-request prefix (tenant + route). Nested *inside* the driver's `prefix`, never replacing it. */
     prefix?: string;
 }
 
@@ -44,8 +47,13 @@ export function joinKey(...parts: Array<string | undefined>): string {
 /**
  * A single Multer `StorageEngine` that adapts ANY {@link StorageDriver} for uploads. It owns the
  * stream→buffer→`putFile` flow and key generation once, so every driver (built-in or custom)
- * gets identical upload behavior. Key generation precedence: per-route options → the driver's
- * `keyDefaults` → built-in defaults.
+ * gets identical upload behavior.
+ *
+ * The key is `driverPrefix / requestPrefix / fileDist / fileName`:
+ * - `prefix` **composes** — the driver's prefix is a base path and the per-request prefix
+ *   (tenant + route) nests inside it, so a driver prefix is never silently dropped.
+ * - `fileDist` / `fileName` **override** — per-request hooks → the driver's `keyDefaults` →
+ *   built-in defaults (`YYYY/MM/DD`, `uuid-originalname`).
  */
 export class DriverMulterEngine implements StorageEngine {
     constructor(
@@ -61,7 +69,8 @@ export class DriverMulterEngine implements StorageEngine {
         const defaults = this.driver.keyDefaults ?? {};
         const nameFn = this.options.fileName ?? defaults.fileName;
         const distFn = this.options.fileDist ?? defaults.fileDist;
-        const prefix = this.options.prefix ?? defaults.prefix;
+        // Join, don't choose: a route/tenant prefix is a folder within the driver's base prefix.
+        const prefix = joinKey(defaults.prefix, this.options.prefix);
 
         let aborted = false;
         const fail = (err: unknown) => {

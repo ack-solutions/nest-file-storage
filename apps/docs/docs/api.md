@@ -38,9 +38,11 @@ defineDriver(DriverClass, options?): DriverFactory
 
 | Options | Fields |
 | --- | --- |
-| `LocalDriverOptions` | `rootPath`, `baseUrl`, + `fileName?`, `fileDist?`, `prefix?` |
+| `LocalDriverOptions` | `rootPath`, `baseUrl` |
 | `S3DriverOptions` | `accessKeyId`, `secretAccessKey`, `region`, `bucket`, `endpoint?`, `cloudFrontUrl?`, `clientOptions?` |
 | `AzureDriverOptions` | `account`, `accountKey`, `container`, `cdnUrl?` |
+
+All three also accept the upload key defaults (`KeyOptions`): `prefix?` — the base path for every upload through the driver, which tenant and route prefixes nest inside — plus `fileDist?` and `fileName?`, which a route's own hooks replace. See [How a key is built](./concepts#how-a-key-is-built).
 
 ## `FileStorageService` (injectable)
 

@@ -3,6 +3,29 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [2.2.0] - 2026-09-22
+
+### Fixed
+
+- **A driver-level `prefix` is no longer discarded by routes and tenants that set their own.** The
+  upload engine chose one prefix instead of composing them (`routePrefix ?? driverPrefix`), so
+  `s3Driver({ …, prefix: 'my-app' })` only applied to routes with no `prefix` — and a tenant prefix
+  (`{ use, prefix: 'tenants/acme' }`) dropped it too. Uploads still succeeded with a self-consistent
+  key and URL, but files silently landed outside the driver's folder (e.g. at the root of a bucket
+  shared with other apps). Prefixes now nest: `driverPrefix / tenantPrefix / routePrefix / fileDist / fileName`,
+  matching the documented `KeyOptions.prefix` contract ("prepended to every key"). Route
+  `fileName` / `fileDist` still **replace** the driver's — only `prefix` composes.
+- Docs: the programmatic multi-tenant recipe now builds keys with
+  `joinKey(driver.keyDefaults?.prefix, prefix, …)` so job-written files match uploads.
+
+### Behavior change
+
+Only for configurations that set **both** a driver `prefix` and a route or tenant prefix: new uploads
+now land under the driver prefix (`my-app/avatars/…` instead of `avatars/…`). Setting only one of them
+— or neither — is unchanged. Existing files are unaffected: stored keys are full paths and keep
+resolving through `getFile` / `getUrl` / `deleteFile`. If you depended on a route escaping the driver
+prefix, register a second driver without `prefix` and select it with `driver:` on those routes.
+
 ## [2.1.0] - 2026-07-14
 
 ### Added
