@@ -50,10 +50,12 @@ All three also accept the upload key defaults (`KeyOptions`): `prefix?` — the 
 getDriver(name?: string): Promise<StorageDriver>
 getTenantDriver(tenantId: string): Promise<{ driver: StorageDriver; prefix?: string }>
 getRegistry(): DriverRegistry
+resolveKey(key, driverName?): Promise<string> // driver prefix + key, laid out like uploads
 
-// delegate to the default driver:
+// delegate to the default driver — every `key` is a FULL key, used exactly as given:
 putFile(content, key, meta?) · getFile(key) · deleteFile(key)
 copyFile(src, dest) · getUrl(key) · getSignedUrl(key, options?)
+getSignedUploadUrl(key, options?) // throws if the driver can't sign uploads
 
 // deprecated static facade:
 static getStorage(name?): Promise<StorageDriver>
@@ -98,9 +100,32 @@ interface StorageDriver {
   copyFile(sourceKey: string, destKey: string): Promise<UploadedFile>;
   getUrl(key: string): string | Promise<string>;
   getSignedUrl?(key: string, options?: SignedUrlOptions): Promise<string>;
+  getSignedUploadUrl?(key: string, options?: SignedUploadUrlOptions): Promise<string>;
   path?(key: string): string | Promise<string>;
   readonly keyDefaults?: { fileName?; fileDist?; prefix? };
 }
+
+interface SignedUploadUrlOptions {
+  expiresIn?: number;     // seconds
+  contentType?: string;   // S3: signed — the client must send the same Content-Type
+  contentLength?: number; // S3: signed — the client must upload exactly this many bytes
+  [key: string]: unknown; // S3 PutObjectCommand input / Azure SAS values
+}
+```
+
+## Keys: full vs. relative
+
+The driver's `prefix` is applied **only by the upload interceptor**. Every direct method — on a driver
+or on `FileStorageService` — takes a **full** key and uses it exactly as given. That is why a key stored
+from an upload (which already includes the prefix) reads back unchanged. To build a new key the way
+uploads do, use `resolveKey`:
+
+```ts
+import { resolveKey } from '@ackplus/nest-file-storage';
+
+resolveKey(driver, 'reports', 'q3.pdf');           // 'my-app/reports/q3.pdf'
+resolveKey(driver, tenantPrefix, 'reports/q3.pdf'); // 'my-app/tenants/acme/reports/q3.pdf'
+await fileStorage.resolveKey('reports/q3.pdf');     // same, on the default driver
 ```
 
 ## `UploadValidation`

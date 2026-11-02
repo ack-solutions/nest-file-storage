@@ -3,7 +3,36 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
-## [Unreleased]
+## [2.3.0] - 2026-11-02
+
+### Added
+
+- **Signed upload URLs (presigned `PUT`)** — `StorageDriver.getSignedUploadUrl?(key, options)` and
+  `FileStorageService.getSignedUploadUrl(key, options)`, so clients (e.g. mobile apps) can upload large
+  files straight to storage without the bytes passing through the API server
+  ([#8](https://github.com/ack-solutions/nest-file-storage/issues/8)). Options: `expiresIn` (seconds),
+  `contentType`, `contentLength`, plus provider extras.
+  - **S3:** a presigned `PutObjectCommand`. `contentType` / `contentLength` are **signed** headers, so the
+    client's `PUT` must send the same values. The URL is signed without the SDK's default checksum
+    (which, presigned, would be the checksum of an empty body and make S3 reject the upload).
+  - **Azure:** a SAS with create/write (`cw`) permission on the blob endpoint (never `cdnUrl`). The
+    client sends `x-ms-blob-type: BlockBlob`; a SAS can't pin the content type or size.
+  - The service method has **no fallback** (unlike `getSignedUrl`): it throws when the default driver
+    can't sign uploads, e.g. local.
+- **`resolveKey`** — `resolveKey(driver, ...parts)` and `FileStorageService.resolveKey(key, driverName?)`
+  build a full key the way uploads do (the driver's `prefix` first). Use it for files written outside the
+  interceptor so they land in the driver's folder
+  ([#8](https://github.com/ack-solutions/nest-file-storage/issues/8)).
+- `SignedUploadUrlOptions` type export.
+
+### Docs
+
+- Documented that **every direct method takes a full key** (`putFile`, `getFile`, `deleteFile`,
+  `copyFile`, `getUrl`, `getSignedUrl`, `getSignedUploadUrl`) and that the driver `prefix` is applied by
+  the upload interceptor only. This is deliberate and unchanged: keys stored from uploads already include
+  the prefix, so applying it again in the direct methods would double it and break reads of every
+  existing file. New "Direct uploads to storage" and "Full keys and the driver prefix" sections in the
+  service guide.
 
 ### Fixed
 

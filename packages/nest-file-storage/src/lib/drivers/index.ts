@@ -3,7 +3,7 @@ import type { AzureDriverDeps } from './azure.driver';
 import type { DriverFactory, StorageDriver } from './driver.interface';
 import type { S3DriverDeps } from './s3.driver';
 
-export type { StorageDriver, DriverFactory, DriverOptions, KeyOptions, PutFileMeta, SignedUrlOptions, FileKeyResolver, UploadedFile } from './driver.interface';
+export type { StorageDriver, DriverFactory, DriverOptions, KeyOptions, PutFileMeta, SignedUrlOptions, SignedUploadUrlOptions, FileKeyResolver, UploadedFile } from './driver.interface';
 
 /** Built-in local-filesystem driver. */
 export function localDriver(options: LocalDriverOptions): DriverFactory {

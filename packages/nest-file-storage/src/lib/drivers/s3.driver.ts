@@ -3,7 +3,14 @@ import type { getSignedUrl as GetSignedUrl } from '@aws-sdk/s3-request-presigner
 import { basename } from 'path';
 
 import type { S3DriverOptions } from '../types';
-import type { KeyOptions, PutFileMeta, SignedUrlOptions, StorageDriver, UploadedFile } from './driver.interface';
+import type {
+    KeyOptions,
+    PutFileMeta,
+    SignedUploadUrlOptions,
+    SignedUrlOptions,
+    StorageDriver,
+    UploadedFile,
+} from './driver.interface';
 import { streamToBuffer, stripTrailingSlash } from './driver.util';
 
 /** Runtime SDK pieces injected by the `s3Driver` factory, so this module never statically requires the SDK. */
@@ -16,6 +23,8 @@ export interface S3DriverDeps {
 export class S3Driver implements StorageDriver {
     readonly keyDefaults: KeyOptions;
     private readonly client: S3Sdk.S3;
+    private readonly clientConfig: S3Sdk.S3ClientConfig;
+    private uploadSigner?: S3Sdk.S3;
     private readonly bucket: string;
 
     constructor(
@@ -26,7 +35,7 @@ export class S3Driver implements StorageDriver {
         this.keyDefaults = { fileName: options.fileName, fileDist: options.fileDist, prefix: options.prefix };
 
         // Pass ONLY S3-client-relevant options (v1 spread the whole options object, incl. functions).
-        this.client = new deps.sdk.S3({
+        this.clientConfig = {
             region: options.region,
             ...(options.endpoint ? { endpoint: options.endpoint } : {}),
             credentials: {
@@ -34,7 +43,8 @@ export class S3Driver implements StorageDriver {
                 secretAccessKey: options.secretAccessKey,
             },
             ...(options.clientOptions ?? {}),
-        });
+        };
+        this.client = new deps.sdk.S3(this.clientConfig);
     }
 
     getUrl(key: string): string {
@@ -59,6 +69,41 @@ export class S3Driver implements StorageDriver {
             command,
             expiresIn != null ? { expiresIn } : {},
         );
+    }
+
+    async getSignedUploadUrl(key: string, options: SignedUploadUrlOptions = {}): Promise<string> {
+        if (!key) throw new Error('Key is required to sign an S3 upload URL.');
+        const { expiresIn, contentType, contentLength, ...commandOverrides } = options;
+        // ContentType / ContentLength become signed headers: the client's PUT must send the same values.
+        const command = new this.deps.sdk.PutObjectCommand({
+            Bucket: this.bucket,
+            Key: key,
+            ...(contentType ? { ContentType: contentType } : {}),
+            ...(contentLength != null ? { ContentLength: contentLength } : {}),
+            ...commandOverrides,
+        });
+        // The presigner only signs headers it is told to; without this the type/size aren't enforced.
+        const signableHeaders = new Set<string>();
+        if (contentType) signableHeaders.add('content-type');
+        if (contentLength != null) signableHeaders.add('content-length');
+        return this.deps.getSignedUrl(this.getUploadSigner() as never, command, {
+            ...(expiresIn != null ? { expiresIn } : {}),
+            ...(signableHeaders.size ? { signableHeaders } : {}),
+        });
+    }
+
+    /**
+     * Client used only to presign uploads. Recent SDKs add a default CRC32 checksum to every
+     * PutObject; presigned, that is the checksum of an EMPTY body, so S3 rejects the client's real
+     * upload. Signing with `requestChecksumCalculation: 'WHEN_REQUIRED'` leaves it out.
+     */
+    private getUploadSigner(): S3Sdk.S3 {
+        this.uploadSigner ??= new this.deps.sdk.S3({
+            ...this.clientConfig,
+            requestChecksumCalculation: 'WHEN_REQUIRED',
+            ...(this.options.clientOptions ?? {}),
+        });
+        return this.uploadSigner;
     }
 
     async getFile(key: string): Promise<Buffer> {

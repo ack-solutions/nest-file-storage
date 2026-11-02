@@ -21,5 +21,5 @@ export * from './validation';
 export * from './tenant/tenant-from';
 
 // Multer engine (advanced / custom integrations)
-export { DriverMulterEngine, joinKey } from './multer/driver-multer-engine';
+export { DriverMulterEngine, joinKey, resolveKey } from './multer/driver-multer-engine';
 export type { EngineKeyOptions } from './multer/driver-multer-engine';

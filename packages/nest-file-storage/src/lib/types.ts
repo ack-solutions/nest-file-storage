@@ -17,6 +17,7 @@ export type {
     FileKeyResolver,
     PutFileMeta,
     SignedUrlOptions,
+    SignedUploadUrlOptions,
     UploadedFile,
 } from './drivers/driver.interface';
 export type { TenantOptions, TenantDriverSpec, TenantCacheOptions, MaybePromise } from './tenant/tenant.types';

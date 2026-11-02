@@ -41,10 +41,10 @@ s3Driver({
 });
 ```
 
-Requires `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (loaded lazily). `getSignedUrl(key, { expiresIn })` returns a presigned URL.
+Requires `@aws-sdk/client-s3` and `@aws-sdk/s3-request-presigner` (loaded lazily). `getSignedUrl(key, { expiresIn })` returns a presigned download URL; `getSignedUploadUrl(key, { expiresIn, contentType?, contentLength? })` returns a presigned `PUT` URL for [direct client uploads](./service#direct-uploads-to-storage-presigned-put).
 
 :::tip Sharing a bucket with other apps
-Add `prefix: 'my-app'` to keep this app's files in their own folder. It's the base path for every upload through the driver — tenant and route prefixes nest inside it (`my-app/tenants/acme/avatars/…`), so no call site has to remember it. Works the same for Azure containers and local roots.
+Add `prefix: 'my-app'` to keep this app's files in their own folder. It's the base path for every upload through the driver — tenant and route prefixes nest inside it (`my-app/tenants/acme/avatars/…`), so no upload route has to remember it. Direct calls (`putFile`, `getSignedUploadUrl`, …) take full keys — build new ones with [`resolveKey`](./api#keys-full-vs-relative). Works the same for Azure containers and local roots.
 :::
 
 ## Azure Blob Storage
@@ -60,7 +60,7 @@ azureDriver({
 });
 ```
 
-Requires `@azure/storage-blob` (loaded lazily). `getSignedUrl(key, { expiresIn })` returns a SAS URL (or the CDN URL when `cdnUrl` is set).
+Requires `@azure/storage-blob` (loaded lazily). `getSignedUrl(key, { expiresIn })` returns a SAS URL (or the CDN URL when `cdnUrl` is set). `getSignedUploadUrl(key, { expiresIn })` returns a create/write SAS on the blob endpoint (never the CDN); the client must send `x-ms-blob-type: BlockBlob`, and can set the type with `x-ms-blob-content-type` — a SAS can't pin type or size.
 
 ## Comparison
 
@@ -69,6 +69,7 @@ Requires `@azure/storage-blob` (loaded lazily). `getSignedUrl(key, { expiresIn }
 | `putFile` / `getFile` / `deleteFile` / `copyFile` | ✅ | ✅ | ✅ | ✅ |
 | `getUrl` | ✅ | ✅ | ✅ | ✅ |
 | `getSignedUrl` | — | ✅ | ✅ (SAS) | optional |
+| `getSignedUploadUrl` | — | ✅ (presigned PUT) | ✅ (SAS) | optional |
 | `path` (absolute FS path) | ✅ | — | — | optional |
 | Public URLs need extra setup | static serving | bucket/CDN policy | container/CDN policy | your call |
 | Extra dependency | none | `@aws-sdk/*` | `@azure/storage-blob` | your SDK |

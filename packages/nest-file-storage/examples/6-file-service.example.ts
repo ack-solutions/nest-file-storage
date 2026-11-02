@@ -48,6 +48,16 @@ export class FileService {
     return this.fileStorage.getSignedUrl(key, { expiresIn });
   }
 
+  /**
+   * Signed upload URL (S3 presigned PUT / Azure SAS) so the client uploads straight to storage.
+   * `resolveKey` adds the driver's `prefix`, so the file lands where interceptor uploads do.
+   */
+  async createUploadUrl(fileName: string, contentType: string) {
+    const key = await this.fileStorage.resolveKey(`uploads/${Date.now()}-${fileName}`);
+    const uploadUrl = await this.fileStorage.getSignedUploadUrl(key, { expiresIn: 300, contentType });
+    return { key, uploadUrl }; // client PUTs to uploadUrl with the same Content-Type
+  }
+
   /** Upload from a Buffer. */
   async uploadBuffer(buffer: Buffer, key: string, contentType?: string) {
     const result = await this.fileStorage.putFile(buffer, key, { contentType });
