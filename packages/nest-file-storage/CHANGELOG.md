@@ -3,6 +3,15 @@
 All notable changes to `@ackplus/nest-file-storage` are documented here. This project adheres to
 [Semantic Versioning](https://semver.org/) and the [Keep a Changelog](https://keepachangelog.com/) format.
 
+## [Unreleased]
+
+### Fixed
+
+- **The published package no longer ships TypeScript's incremental-build cache.**
+  `dist/tsconfig.build.tsbuildinfo` (~380 kB, ~70% of the unpacked size) was included in every
+  tarball. The package build now disables incremental output — it always starts from a clean `dist/`,
+  so the cache was never reused. Download size drops from ~120 kB to ~40 kB; no code or API changes.
+
 ## [2.2.0] - 2026-09-22
 
 ### Fixed
