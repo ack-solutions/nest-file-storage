@@ -45,6 +45,20 @@ export function joinKey(...parts: Array<string | undefined>): string {
 }
 
 /**
+ * Build a full storage key the way the upload engine does: the driver's own `prefix`
+ * (`keyDefaults.prefix`) first, then `parts`. Use it when writing files outside the interceptor so
+ * they land in the same folder as uploads. Pass the result — or a key stored from an upload, which
+ * is already full — to the direct methods (`putFile`, `getFile`, `getSignedUploadUrl`, …).
+ *
+ * @example
+ * const { driver, prefix } = await fileStorage.getTenantDriver('acme');
+ * await driver.putFile(buf, resolveKey(driver, prefix, 'reports', 'q3.pdf'));
+ */
+export function resolveKey(driver: Pick<StorageDriver, 'keyDefaults'>, ...parts: Array<string | undefined>): string {
+    return joinKey(driver.keyDefaults?.prefix, ...parts);
+}
+
+/**
  * A single Multer `StorageEngine` that adapts ANY {@link StorageDriver} for uploads. It owns the
  * stream→buffer→`putFile` flow and key generation once, so every driver (built-in or custom)
  * gets identical upload behavior.

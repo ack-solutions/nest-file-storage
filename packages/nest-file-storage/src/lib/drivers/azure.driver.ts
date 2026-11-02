@@ -2,7 +2,14 @@ import type * as AzureSdk from '@azure/storage-blob';
 import { basename } from 'path';
 
 import type { AzureDriverOptions } from '../types';
-import type { KeyOptions, PutFileMeta, SignedUrlOptions, StorageDriver, UploadedFile } from './driver.interface';
+import type {
+    KeyOptions,
+    PutFileMeta,
+    SignedUploadUrlOptions,
+    SignedUrlOptions,
+    StorageDriver,
+    UploadedFile,
+} from './driver.interface';
 import { streamToBuffer, stripTrailingSlash } from './driver.util';
 
 /** Runtime SDK injected by the `azureDriver` factory, so this module never statically requires the SDK. */
@@ -44,6 +51,18 @@ export class AzureDriver implements StorageDriver {
         }
 
         const { expiresIn, ...rest } = options;
+        return this.signBlobUrl(key, 'r', expiresIn, rest);
+    }
+
+    async getSignedUploadUrl(key: string, options: SignedUploadUrlOptions = {}): Promise<string> {
+        if (!key) throw new Error('Key is required to sign an Azure upload URL.');
+        // Never the CDN: uploads must go to the blob endpoint. A SAS can't pin the upload's content
+        // type or size — the client sends `x-ms-blob-type: BlockBlob` (+ `x-ms-blob-content-type`).
+        const { expiresIn, contentType: _contentType, contentLength: _contentLength, ...rest } = options;
+        return this.signBlobUrl(key, 'cw', expiresIn, rest);
+    }
+
+    private signBlobUrl(key: string, permissions: string, expiresIn: number | undefined, extra: object): string {
         const blobClient = this.serviceClient.getContainerClient(this.container).getBlobClient(key);
         const startsOn = new Date();
         const expiresOn = new Date(startsOn.getTime() + (expiresIn ?? 3600) * 1000);
@@ -53,11 +72,11 @@ export class AzureDriver implements StorageDriver {
                 {
                     containerName: this.container,
                     blobName: key,
-                    permissions: this.deps.sdk.BlobSASPermissions.parse('r'),
+                    permissions: this.deps.sdk.BlobSASPermissions.parse(permissions),
                     protocol: this.deps.sdk.SASProtocol.Https,
                     startsOn,
                     expiresOn,
-                    ...(rest as object),
+                    ...extra,
                 },
                 this.credential,
             )

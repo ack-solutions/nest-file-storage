@@ -87,16 +87,16 @@ this.fileStorage.getRegistry().invalidateTenant('acme');
 Outside a request (background jobs, URL generation), resolve a tenant's driver via the same cache:
 
 ```ts
-import { joinKey } from '@ackplus/nest-file-storage';
+import { resolveKey } from '@ackplus/nest-file-storage';
 
 const { driver, prefix } = await this.fileStorage.getTenantDriver('acme');
 const url = await driver.getUrl(existingKey);
 // to build a NEW key laid out exactly like an upload (driver prefix → tenant prefix → …):
-const key = joinKey(driver.keyDefaults?.prefix, prefix, '2026/06', 'report.pdf');
+const key = resolveKey(driver, prefix, '2026/06', 'report.pdf');
 await driver.putFile(buffer, key);
 ```
 
-`putFile` stores at exactly the key you pass, so include the driver's own `prefix` as shown — otherwise a job-written file lands outside the driver's folder while uploads land inside it.
+`putFile` stores at exactly the key you pass, so build new keys with `resolveKey` (it adds the driver's own `prefix`, like `joinKey(driver.keyDefaults?.prefix, …)`) — otherwise a job-written file lands outside the driver's folder while uploads land inside it.
 
 ## Identifying the tenant — `tenantFrom`
 

@@ -22,6 +22,7 @@ Wiring Multer to S3/Azure/local by hand means juggling storage engines, SDK clie
 - **Custom storage is first-class** — implement a small [`StorageDriver`](https://ack-solutions.github.io/nest-file-storage/custom-drivers) and it works everywhere (interceptor + service).
 - **Per-request / multi-tenant** — route each upload to the right bucket/folder, with per-tenant driver caching. See [multi-tenant](https://ack-solutions.github.io/nest-file-storage/multi-tenant).
 - **Declarative validation** — size, MIME, extension, and count limits as data → typed `400`s.
+- **Direct client uploads** — signed upload URLs (S3 presigned `PUT`, Azure SAS) so large files skip your API server. See [the service guide](https://ack-solutions.github.io/nest-file-storage/service#direct-uploads-to-storage-presigned-put).
 - **One result shape** — every upload returns the same `UploadedFile` (`key`, `url`, `size`, …).
 - **Lean dependencies** — the AWS and Azure SDKs are optional peers, loaded lazily only if you use them.
 

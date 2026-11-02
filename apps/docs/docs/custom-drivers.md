@@ -19,12 +19,13 @@ interface StorageDriver {
   getUrl(key: string): string | Promise<string>;
   // optional:
   getSignedUrl?(key: string, options?: SignedUrlOptions): Promise<string>;
+  getSignedUploadUrl?(key: string, options?: SignedUploadUrlOptions): Promise<string>;
   path?(key: string): string | Promise<string>;
   readonly keyDefaults?: { fileName?; fileDist?; prefix? };
 }
 ```
 
-Only the required methods matter; implement `getSignedUrl` / `path` if your backend supports them.
+Only the required methods matter; implement `getSignedUrl` / `getSignedUploadUrl` / `path` if your backend supports them. Direct methods receive **full** keys — don't apply `keyDefaults.prefix` inside them.
 
 To support upload key defaults, expose `keyDefaults` (the built-in drivers fill it from their options — `defineDriver` doesn't do it for you): `fileName` / `fileDist` apply when a route doesn't set its own, and `prefix` is always the base path that tenant and route prefixes nest inside. See [How a key is built](./concepts#how-a-key-is-built).
 

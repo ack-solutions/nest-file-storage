@@ -19,8 +19,10 @@ export interface KeyOptions {
      * Base path for every upload through this driver (e.g. `my-app` to keep one app's files in its own
      * folder of a shared bucket). Tenant and route prefixes nest inside it — it is never replaced.
      *
-     * Applied by the upload engine (the interceptor). `putFile(content, key)` stores at exactly `key`;
-     * to match uploads when building keys yourself, use `joinKey(driver.keyDefaults?.prefix, …)`.
+     * Applied by the upload engine (the interceptor) only. The direct driver/service methods
+     * (`putFile`, `getFile`, `getSignedUploadUrl`, …) take a **full** key and use it exactly as given —
+     * that is what lets keys stored from uploads be read back unchanged. To build a new key laid out
+     * like an upload, use `resolveKey(driver, …)` or `FileStorageService.resolveKey(…)`.
      */
     prefix?: string;
 }
@@ -41,6 +43,21 @@ export interface SignedUrlOptions {
     /** Expiry in seconds. */
     expiresIn?: number;
     /** Provider-specific extras merged into the native call. */
+    [key: string]: unknown;
+}
+
+/** Options for {@link StorageDriver.getSignedUploadUrl}. */
+export interface SignedUploadUrlOptions {
+    /** Expiry in seconds. Default: 3600 (Azure); the presigner's default (900) on S3. */
+    expiresIn?: number;
+    /**
+     * Content type the client must upload with. On S3 it is signed, so the PUT must send the same
+     * `Content-Type` header. Azure SAS cannot pin it; the client sets `x-ms-blob-content-type`.
+     */
+    contentType?: string;
+    /** Exact size in bytes the client must upload (S3 only — signed as `Content-Length`). */
+    contentLength?: number;
+    /** Provider-specific extras merged into the native call (S3 `PutObjectCommand` input, Azure SAS values). */
     [key: string]: unknown;
 }
 
@@ -98,8 +115,15 @@ export interface StorageDriver {
     /** Public URL for `key`. */
     getUrl(key: string): string | Promise<string>;
 
-    /** Time-limited signed URL (S3/Azure). Not all drivers implement this. */
+    /** Time-limited signed download (GET) URL (S3/Azure). Not all drivers implement this. */
     getSignedUrl?(key: string, options?: SignedUrlOptions): Promise<string>;
+
+    /**
+     * Time-limited signed upload URL, so a client can upload straight to storage without the bytes
+     * passing through the server (S3: presigned `PUT`; Azure: SAS with create/write permission — the
+     * client must send `x-ms-blob-type: BlockBlob`). Not all drivers implement this.
+     */
+    getSignedUploadUrl?(key: string, options?: SignedUploadUrlOptions): Promise<string>;
 
     /** Absolute filesystem path for `key` (local driver only). */
     path?(key: string): string | Promise<string>;

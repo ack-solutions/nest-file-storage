@@ -2,7 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 
 import { FILE_STORAGE_REGISTRY } from './constants';
 import type { DriverRegistry, ResolvedDriver } from './driver-registry';
-import type { PutFileMeta, SignedUrlOptions, StorageDriver, UploadedFile } from './drivers/driver.interface';
+import type {
+    PutFileMeta,
+    SignedUploadUrlOptions,
+    SignedUrlOptions,
+    StorageDriver,
+    UploadedFile,
+} from './drivers/driver.interface';
+import { resolveKey } from './multer/driver-multer-engine';
 import { FileStorageRegistryHolder } from './registry-holder';
 
 /**
@@ -33,6 +40,18 @@ export class FileStorageService {
         return this.registry.getTenantDriver(tenantId);
     }
 
+    /**
+     * Build a full key for a driver (the default when `driverName` is omitted) the way uploads do:
+     * the driver's `prefix` first, then `key`. The direct methods below take full keys and use them
+     * exactly as given, so pass new keys through this; keys stored from uploads are already full.
+     *
+     * @example
+     * await this.fileStorage.putFile(buf, await this.fileStorage.resolveKey('reports/q3.pdf'));
+     */
+    async resolveKey(key: string, driverName?: string): Promise<string> {
+        return resolveKey(await this.getDriver(driverName), key);
+    }
+
     async putFile(content: Buffer, key: string, meta?: PutFileMeta): Promise<UploadedFile> {
         return (await this.getDriver()).putFile(content, key, meta);
     }
@@ -56,6 +75,18 @@ export class FileStorageService {
     async getSignedUrl(key: string, options?: SignedUrlOptions): Promise<string> {
         const driver = await this.getDriver();
         return driver.getSignedUrl ? driver.getSignedUrl(key, options) : driver.getUrl(key);
+    }
+
+    /**
+     * Signed upload URL on the default driver (S3 presigned `PUT`, Azure SAS). Unlike
+     * `getSignedUrl` there is no fallback: throws when the driver can't sign uploads (e.g. local).
+     */
+    async getSignedUploadUrl(key: string, options?: SignedUploadUrlOptions): Promise<string> {
+        const driver = await this.getDriver();
+        if (!driver.getSignedUploadUrl) {
+            throw new Error('The default storage driver does not support signed upload URLs.');
+        }
+        return driver.getSignedUploadUrl(key, options);
     }
 
     /**
